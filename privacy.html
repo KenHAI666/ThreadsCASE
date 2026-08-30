@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>脆文雷達｜隱私政策</title>
+  <style>
+    :root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC",sans-serif;color:#171717;background:#f5f4ef;line-height:1.75}*{box-sizing:border-box}body{margin:0}.wrap{width:min(820px,calc(100% - 32px));margin:auto}.top{padding:22px 0;border-bottom:1px solid #dfe3e8}.top a{text-decoration:none;font-weight:800}.paper{margin:42px auto;padding:38px;background:#fff;border:1px solid #dfe3e8;border-radius:20px}h1{font-size:38px;line-height:1.2;margin:0 0 8px}h2{margin-top:32px;font-size:22px}.muted{color:#666b73}li{margin:7px 0}a{color:#0757b8}@media(max-width:640px){.paper{padding:25px;margin-top:22px}h1{font-size:31px}}
+  </style>
+</head>
+<body>
+  <header class="top"><div class="wrap"><a href="index.html">← 回到脆文雷達</a></div></header>
+  <main class="wrap paper">
+    <h1>隱私政策</h1>
+    <p class="muted">生效日期：2026 年 8 月 27 日｜適用版本：v1.0.0 及後續版本</p>
+    <p>脆文雷達以「資料留在使用者的 Chrome」為核心原則。本政策說明擴充功能處理哪些資料、用途、儲存位置與使用者的控制方式。</p>
+
+    <h2>1. 處理的資料</h2>
+    <ul>
+      <li>使用者自己的 Threads 帳號文章，以及使用者以關鍵字探索時在 Threads 網頁可見的公開貼文文字、網址、時間、媒體網址與互動數據。</li>
+      <li>使用者在本機建立的監控關鍵字、回覆內容、留言候選與執行紀錄。</li>
+      <li>Google 登入後的最小必要會員資料：Google 使用者 ID、Email、顯示名稱、會員方案、最後登入時間與擴充版本。</li>
+    </ul>
+
+    <h2>2. 使用目的</h2>
+    <ul>
+      <li>抓取、預覽、搜尋、排序、非 AI 分析及匯出 Threads 公開內容。</li>
+      <li>執行使用者設定的留言監控、人工確認回覆或明確啟用的自動回覆。</li>
+      <li>辨識會員、判斷 Free／VIP／PRO 方案並維持服務安全。</li>
+    </ul>
+
+    <h2>3. 本機與雲端邊界</h2>
+    <p>Threads 貼文、留言、分析、監控規則與回覆紀錄儲存於擴充功能來源下的 IndexedDB 或 <code>chrome.storage.local</code>，不傳送至營運者伺服器。營運後台只儲存會員身分、方案與基本登入紀錄，看不到 Threads 內容、Cookie、密碼或回覆規則。</p>
+    <p>本服務不要求 Google Drive 或 Google Sheets 權限，不使用 AI API，不出售 Threads 或會員資料，不用於個人化廣告。</p>
+
+    <h2>4. 對外網路連線</h2>
+    <ul>
+      <li><code>threads.com</code> 與 <code>threads.net</code>：讀取使用者當前可見的公開頁面，並在使用者指示下進行回覆操作。</li>
+      <li>Google Identity 與 UserInfo：完成 Google 登入與 Email 身分驗證。</li>
+      <li>脆文雷達營運後台 GAS：傳送 Google 存取憑證與擴充版本，用於驗證身分及方案；不傳送 Threads 文案、留言或回覆內容。</li>
+    </ul>
+
+    <h2>5. 權限用途</h2>
+    <ul>
+      <li><strong>storage</strong>：儲存本機設定、狀態與文案資料。</li>
+      <li><strong>tabs</strong>：開啟或切換 Threads 與擴充主控台頁面。</li>
+      <li><strong>downloads</strong>：下載 CSV 與 JSON 匯出或備份。</li>
+      <li><strong>alarms</strong>：使用 Manifest V3 排程執行已啟用的監控規則。</li>
+      <li><strong>identity</strong>：使用 Google 登入辨識會員，僅要求 Email 身分範圍。</li>
+    </ul>
+
+    <h2>6. 保存、匯出與刪除</h2>
+    <p>本機內容保存至使用者主動刪除、清空資料或移除擴充功能為止。使用者可隨時匯出 CSV／JSON 或完整 JSON 備份。移除擴充功能可能造成本機資料消失，且不保證跨裝置同步。</p>
+    <p>如要查詢或刪除營運後台中的會員資料，請使用登入用 Email 寄信至 <a href="mailto:uncleken@runing9to5.com">uncleken@runing9to5.com</a>。完成身分核對後，將於 30 日內處理。</p>
+
+    <h2>7. Threads 平台限制</h2>
+    <p>本擴充功能使用使用者已登入的 Threads 網頁狀態，不讀取或保存 Threads 密碼。Threads 界面、驗證或平台規則可能影響功能；遇到驗證、限制或異常時應停止執行並由使用者處理。</p>
+
+    <h2>8. 政策更新與聯絡</h2>
+    <p>若資料處理方式有重大變更，將於本頁更新生效日期。隱私相關問題請聯絡 <a href="mailto:uncleken@runing9to5.com">uncleken@runing9to5.com</a>。</p>
+  </main>
+</body>
+</html>

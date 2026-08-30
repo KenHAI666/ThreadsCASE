@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#f5f4ef">
+  <meta name="description" content="脆文雷達：抓取自己的 Threads 文章、探索公開主題內容，建立 Chrome 本機文案庫，並設定自己的貼文關鍵字自動回覆。不需 Meta API，也不需 Google Drive 權限。">
+  <title>脆文雷達｜你的文案，你的資料</title>
+  <style>
+    :root {
+      --ink: #171717;
+      --navy: #14213d;
+      --muted: #666b73;
+      --line: #e2e5e9;
+      --paper: #fff;
+      --bg: #f5f4ef;
+      --blue: #0a6ee8;
+      --blue-dark: #0757b8;
+      --blue-soft: #eaf3ff;
+      --soft: #efeee8;
+      color: var(--ink);
+      background: var(--bg);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { margin: 0; line-height: 1.65; }
+    a { color: inherit; }
+    .wrap { width: min(1080px, calc(100% - 32px)); margin: auto; }
+    .muted { color: var(--muted); }
+    .mini { font-size: 13px; }
+
+    .nav {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      border-bottom: 1px solid rgba(20, 33, 61, .08);
+      background: rgba(245, 244, 239, .9);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+    }
+
+    .nav-inner {
+      display: flex;
+      min-height: 68px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+    }
+
+    .brand {
+      flex: 0 0 auto;
+      font-size: 18px;
+      font-weight: 850;
+      letter-spacing: -.035em;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .nav-links { display: flex; align-items: center; gap: 17px; font-size: 13px; }
+    .nav-links a { text-decoration: none; white-space: nowrap; }
+    .nav-links > a:not(.button) { color: #4f5660; }
+    .nav-links > a:not(.button):hover { color: var(--blue); }
+
+    .button {
+      display: inline-flex;
+      min-height: 48px;
+      align-items: center;
+      justify-content: center;
+      padding: 0 19px;
+      border: 1px solid var(--blue);
+      border-radius: 11px;
+      font-size: 14px;
+      font-weight: 750;
+      text-decoration: none;
+      white-space: nowrap;
+      transition: background .2s ease, border-color .2s ease, color .2s ease, transform .2s ease;
+    }
+
+    .button:hover { transform: translateY(-1px); }
+    .button.primary { background: var(--blue); color: #fff; }
+    .button.primary:hover { border-color: var(--blue-dark); background: var(--blue-dark); }
+    .button.secondary { background: transparent; color: var(--blue-dark); }
+    .button.secondary:hover { background: var(--blue-soft); }
+    .button.disabled { border-color: #bbbcc0; background: #dddcd7; color: #7a7b7f; cursor: not-allowed; }
+    .button.disabled:hover { transform: none; }
+    .nav .button { min-height: 40px; padding: 0 14px; font-size: 12px; }
+
+    .hero { padding: 82px 0 70px; }
+    .hero-grid { display: grid; grid-template-columns: 1.25fr .75fr; align-items: center; gap: 48px; }
+    .eyebrow, .status { display: inline-flex; align-items: center; gap: 7px; padding: 6px 11px; border-radius: 999px; font-size: 12px; font-weight: 750; }
+    .eyebrow { background: var(--blue-soft); color: var(--blue-dark); }
+    .status { background: var(--soft); color: #555b64; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--blue); }
+
+    h1 { margin: 18px 0; font-size: clamp(46px, 7vw, 72px); line-height: 1.06; letter-spacing: -.05em; }
+    h2 { margin: 0 0 12px; font-size: clamp(30px, 4vw, 42px); line-height: 1.2; letter-spacing: -.03em; }
+    h3 { margin: 0 0 8px; letter-spacing: -.02em; }
+    .lead { max-width: 680px; color: var(--muted); font-size: 19px; line-height: 1.8; }
+    .promise { margin: 18px 0 0; font-weight: 750; }
+    .actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
+    .hint { margin-top: 12px; color: var(--muted); font-size: 13px; }
+
+    .hero-card, .card, .table-shell, .split-panel {
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: var(--paper);
+    }
+
+    .hero-card { padding: 27px; box-shadow: 0 16px 45px rgba(20, 33, 61, .08); }
+    .hero-card h3 { margin-top: 18px; font-size: 21px; }
+    .hero-card ul { margin: 14px 0 0; padding-left: 20px; color: #454b54; }
+    .hero-card li { margin: 7px 0; }
+
+    .section { padding: 64px 0; scroll-margin-top: 78px; }
+    .section-head { max-width: 720px; margin-bottom: 29px; }
+    .section-head p { margin-bottom: 0; font-size: 16px; }
+
+    .steps { display: grid; grid-template-columns: repeat(6, 1fr); gap: 16px; }
+    .card { grid-column: span 2; min-height: 210px; padding: 24px; }
+    .card:nth-child(4), .card:nth-child(5) { grid-column: span 3; }
+    .step-no { display: grid; width: 34px; height: 34px; place-items: center; margin-bottom: 18px; border-radius: 9px; background: var(--blue); color: #fff; font-size: 12px; font-weight: 800; }
+    .card h3 { font-size: 17px; }
+    .card p { margin-bottom: 0; font-size: 14px; }
+
+    .plans { background: rgba(234, 243, 255, .46); }
+    .table-shell { overflow: auto; }
+    .compare { width: 100%; min-width: 760px; border-collapse: collapse; }
+    .compare th, .compare td { padding: 16px 18px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; font-size: 14px; }
+    .compare th { background: #fafbfc; font-size: 14px; }
+    .compare th:first-child { width: 27%; }
+    .compare tr:last-child td { border-bottom: 0; }
+    .yes { color: var(--blue-dark); font-weight: 750; }
+    .no { color: #898b90; }
+    .plan-notes { margin-top: 17px; }
+    .plan-notes p { margin: 4px 0; }
+
+    .split-panel { display: grid; grid-template-columns: 1fr 1fr; gap: 34px; padding: 32px; }
+    .split-panel ul { margin: 10px 0 0; padding-left: 20px; }
+    .split-panel li { margin: 7px 0; }
+    .split-panel h3:not(:first-child) { margin-top: 23px; }
+    .payment-title { margin-top: 16px; }
+    .privacy-section { padding-top: 72px; }
+
+    .download { padding: 60px 0 90px; }
+    .download-box { display: flex; align-items: center; justify-content: space-between; gap: 28px; padding: 42px; border-radius: 24px; background: var(--navy); color: #fff; }
+    .download-box .muted { color: #c8d1df; }
+    .download-box .button { border-color: #fff; background: #fff; color: var(--navy); }
+    .download-box .button:hover { border-color: #dce9ff; background: #dce9ff; }
+    .download-box .button.disabled { border-color: #46516a; background: #2a3650; color: #aeb9ca; }
+
+    .footer { padding: 28px 0 40px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+    .footer-inner { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
+    .footer strong { display: block; margin-bottom: 3px; color: var(--ink); }
+    .footer-support { text-align: right; }
+    .footer-support a { color: var(--blue-dark); text-decoration: none; }
+
+    @media (max-width: 980px) {
+      .nav-links { gap: 10px; }
+      .nav-links > a:not(.button) { display: none; }
+    }
+
+    @media (max-width: 760px) {
+      .nav-inner { gap: 9px; }
+      .nav-links { margin-left: auto; gap: 7px; }
+      .nav .button { min-height: 39px; padding: 0 10px; font-size: 11px; }
+      .hero { padding: 52px 0 48px; }
+      .hero-grid, .split-panel { grid-template-columns: 1fr; }
+      .hero-grid { gap: 30px; }
+      h1 { font-size: clamp(47px, 13vw, 66px); }
+      .lead { font-size: 17px; }
+      .section { padding: 48px 0; }
+      .steps { grid-template-columns: 1fr; }
+      .card, .card:nth-child(4), .card:nth-child(5) { grid-column: auto; min-height: 0; }
+      .split-panel { gap: 24px; padding: 25px; }
+      .download-box { flex-direction: column; align-items: flex-start; padding: 32px 26px; }
+      .footer-inner { flex-direction: column; }
+      .footer-support { text-align: left; }
+    }
+
+    @media (max-width: 380px) {
+      .brand { display: none; }
+      .nav-links { width: 100%; justify-content: space-between; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
+    }
+  </style>
+  <style>
+    .portal-shell{display:grid;grid-template-columns:220px 1fr;min-height:620px;background:#fff;border:1px solid var(--line);border-radius:22px;overflow:hidden}.portal-side{padding:24px;background:#14213d;color:#fff}.portal-side h3{font-size:20px}.portal-user{font-size:12px;color:#c0c9d8;word-break:break-all}.portal-nav{display:grid;gap:7px;margin-top:28px}.portal-nav button{border:0;border-radius:9px;padding:11px 12px;text-align:left;background:transparent;color:#ced6e3;font:inherit;cursor:pointer}.portal-nav button.active{background:#fff;color:#14213d;font-weight:750}.portal-main{padding:28px;min-width:0}.portal-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;border-bottom:1px solid var(--line);padding-bottom:18px;margin-bottom:22px}.portal-head h3{font-size:26px}.small-button{border:1px solid var(--line);background:#fff;border-radius:9px;padding:9px 13px;font-weight:700;cursor:pointer}.portal-error{background:#fff0f0;color:#a21b1b;padding:11px 14px;border-radius:9px;margin-bottom:16px}.portal-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.portal-stat{padding:20px;border:1px solid var(--line);border-radius:14px}.portal-stat span{display:block;color:var(--muted);font-size:13px}.portal-stat strong{display:block;font-size:25px;margin-top:6px}.portal-panel{border:1px solid var(--line);border-radius:14px;padding:20px;margin-top:16px}.portal-login{padding:48px 24px;text-align:center}.portal-login p{max-width:520px;margin:8px auto 20px;color:var(--muted)}.portal-login .button{cursor:pointer}.portal-filters{display:grid;grid-template-columns:1fr 160px 150px;gap:10px;margin-bottom:14px}.portal-filters input,.portal-filters select,.portal-form input,.portal-form textarea{width:100%;border:1px solid var(--line);border-radius:9px;padding:11px;font:inherit;background:#fff}.portal-post{border:1px solid var(--line);border-radius:13px;padding:18px;margin-bottom:12px}.portal-post h4{margin:0 0 8px}.portal-post-text{white-space:pre-wrap;max-height:180px;overflow:auto}.portal-metrics{font-size:13px;color:var(--muted);margin:12px 0}.portal-form{display:grid;gap:14px}.portal-form label{display:grid;gap:5px;font-weight:700}.portal-form textarea{min-height:110px;resize:vertical}.portal-actions{display:flex;gap:10px}.portal-table{width:100%;border-collapse:collapse;min-width:720px}.portal-table th,.portal-table td{padding:11px;text-align:left;border-bottom:1px solid var(--line);font-size:13px}.portal-table-wrap{overflow:auto}.portal-empty{color:var(--muted);text-align:center;padding:32px}.portal-tag{font-size:12px;background:#eaf3ff;color:var(--blue);border-radius:999px;padding:5px 9px}.portal-page[hidden]{display:none}@media(max-width:760px){.portal-shell{grid-template-columns:1fr}.portal-side{padding:17px}.portal-nav{display:flex;overflow:auto;margin-top:14px}.portal-nav button{white-space:nowrap}.portal-main{padding:18px}.portal-cards{grid-template-columns:1fr}.portal-filters{grid-template-columns:1fr}.portal-head{align-items:center}}
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <div class="wrap nav-inner">
+      <a class="brand" href="#top">脆文雷達</a>
+      <div class="nav-links">
+        <button class="button secondary" id="open-dashboard" type="button">開啟主控台 ↗</button>
+        <a href="#guide">操作介紹</a>
+        <a href="#plans">方案比較</a>
+        <a href="#payment">測試說明</a>
+        <a href="#privacy">資料隱私</a>
+        
+          <span class="button disabled" aria-disabled="true">Chrome 商店準備中</span>
+        
+      </div>
+    </div>
+  </nav>
+
+  <main id="top">
+    <section class="hero">
+      <div class="wrap hero-grid">
+        <div>
+          <span class="eyebrow"><span class="dot" aria-hidden="true"></span>簡單使用・資料留在本機</span>
+          <h1>你的文案，<br>你的資料。</h1>
+          <p class="lead">脆文雷達在你的瀏覽器中抓取、整理與保存內容。不需要授權 Google 雲端硬碟，也不會把你的文案資料庫上傳到我們的伺服器。</p>
+          <p class="promise">簡單使用。留在本機。由你掌控。</p>
+          <div class="actions">
+            
+              <span class="button disabled" aria-disabled="true">Chrome 商店準備中</span>
+            
+          </div>
+          <p class="hint">不需 Meta API・不需 Google Drive 權限</p>
+        </div>
+
+        <aside class="hero-card">
+          <span class="status">目前版本 v1.0.1</span>
+          <h3>整理自己的文案，探索公開主題。</h3>
+          <ul>
+            <li>未登入每次可抓取 20 篇</li>
+            <li>登入後單次最多抓取 100 篇自己的文章或探索結果</li>
+            <li>建立專屬的 Chrome 本機文案庫</li>
+            <li>隨時匯出 CSV／JSON</li>
+            <li>自己的貼文出現關鍵字，自動送出回覆</li>
+          </ul>
+        </aside>
+      </div>
+    </section>
+
+    <section class="section" id="guide">
+      <div class="wrap">
+        <div class="section-head">
+          <h2>五個步驟開始使用</h2>
+          <p class="muted">先抓取自己的文章，再以關鍵字探索公開主題內容；只有自己的貼文可設定監控與回覆。</p>
+        </div>
+        <div class="steps">
+          <article class="card"><div class="step-no">1</div><h3>免費加入 Chrome</h3><p class="muted">前往 Chrome 線上應用程式商店，點擊「加到 Chrome」完成安裝。</p></article>
+          <article class="card"><div class="step-no">2</div><h3>固定擴充功能</h3><p class="muted">點擊 Chrome 右上角的擴充功能圖示，將脆文雷達固定在工具列。</p></article>
+          <article class="card"><div class="step-no">3</div><h3>登入 Threads</h3><p class="muted">在 Chrome 登入 Threads，準備抓取自己的帳號文章或探索公開主題。</p></article>
+          <article class="card"><div class="step-no">4</div><h3>選擇抓取數量</h3><p class="muted">未登入每次最多 20 篇；登入後可選擇 20／50／100 篇。</p></article>
+          <article class="card"><div class="step-no">5</div><h3>保存並設定回覆</h3><p class="muted">將內容保存在 Chrome 本機；從自己的文章設定觸發文字與回覆內容。</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section plans" id="plans">
+      <div class="wrap">
+        <div class="section-head">
+          <h2>目前使用方式</h2>
+          <p class="muted">v1.0.1 目前提供內部測試。文案、規則與回覆紀錄保存於自己的 Chrome；GAS 只保存會員方案與不含內容的用量彙總。</p>
+        </div>
+        <div class="table-shell">
+          <table class="compare">
+            <thead><tr><th>功能</th><th>未登入</th><th>Google 登入 Free</th><th>PRO（後續付費方案）</th></tr></thead>
+            <tbody>
+              <tr><td>費用</td><td class="yes">免費</td><td class="yes">目前免費</td><td>尚未開放</td></tr>
+              <tr><td>單次抓取上限</td><td>20 篇</td><td class="yes">100 篇</td><td class="yes">100 篇</td></tr>
+              <tr><td>抓取額度</td><td>不保存</td><td class="yes">累積 300 篇</td><td class="yes">每月 500 篇</td></tr>
+              <tr><td>本機文案庫</td><td>不保存</td><td class="yes">最多 300 篇</td><td>保存在 Chrome 本機</td></tr>
+              <tr><td>CSV／JSON 下載</td><td class="yes">可以</td><td class="yes">可以</td><td class="yes">可以</td></tr>
+              <tr><td>本機文案庫與基本分析</td><td class="no">不提供</td><td class="yes">可以</td><td class="yes">可以</td></tr>
+              <tr><td>定期關鍵字探索</td><td class="no">不提供</td><td>1 組</td><td>3 組</td></tr>
+              <tr><td>同時監控貼文</td><td class="no">不提供</td><td>1 篇</td><td>3 篇</td></tr>
+              <tr><td>每篇觸發關鍵字</td><td class="no">不提供</td><td>1 個</td><td>5 個</td></tr>
+              <tr><td>自動回覆額度</td><td class="no">不提供</td><td>累積 100 則</td><td>每月最多 500 則</td></tr>
+              <tr><td>執行紀錄保留</td><td class="no">不提供</td><td>7 天</td><td>90 天</td></tr>
+              <tr><td>收費與方案到期</td><td class="no">—</td><td class="no">目前免費</td><td>開放後另行公告</td></tr>
+              <tr><td>Google 登入</td><td class="yes">不需要</td><td>需要</td><td>需要</td></tr>
+              <tr><td>Meta API 授權</td><td class="yes">不需要</td><td class="yes">不需要</td><td class="yes">不需要</td></tr>
+              <tr><td>Google Drive 權限</td><td class="yes">不需要</td><td class="yes">不需要</td><td class="yes">不需要</td></tr>
+              <tr><td>完整文案儲存位置</td><td>下載至自己的裝置</td><td>Chrome 本機</td><td>Chrome 本機</td></tr>
+              <tr><td>測試資料</td><td>下載檔案</td><td>保存在自己的 Chrome</td><td>保存在自己的 Chrome</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="plan-notes">
+          <p class="mini muted">系統只將成功新增的貼文計入抓取額度；自己的文章與關鍵字探索都相同。更新既有貼文或抓取失敗不計數。只有擴充功能成功直接送出的自動回覆會計入用量；人工在 Threads 按下送出的回覆無法可靠驗證，因此不假裝統計。</p>
+          <p class="mini muted">自動回覆運作時，請保持 Chrome 開啟、Threads 維持登入，並避免電腦進入休眠。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="payment">
+      <div class="wrap">
+        <div class="split-panel">
+          <div>
+            <span class="eyebrow"><span class="dot" aria-hidden="true"></span>未上架測試版</span>
+            <h2 class="payment-title">v1.0.1 現在免費，<br>先把內容流程跑順。</h2>
+            <p class="muted">這一版提供自己的文章抓取、關鍵字探索、本機文案庫與自己的貼文監控。Free 額度已清楚顯示；PRO 的付款、訂閱與到期管理會在正式開放付費前另行公告。</p>
+          </div>
+          <div>
+            <h3>使用提醒</h3>
+            <ul class="muted">
+              <li>未登入每次可抓取 20 篇；Google 登入後單次最多 100 篇。</li>
+              <li>V1 不提供指定他人帳號觀察；公開內容請透過關鍵字探索收集。</li>
+              <li>文案與設定預設保存在自己的 Chrome，不會上傳為雲端文案庫。</li>
+              <li>自動回覆需保持 Chrome 開啟、Threads 維持登入，並受到 Threads 介面與平台限制影響。</li>
+              <li>PRO 方案額度已預留；付款、訂閱、進階分析與發文時機運算保留至後續版本。</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section privacy-section" id="privacy">
+      <div class="wrap">
+        <div class="section-head">
+          <h2>你的資料，<br>只留在你手上。</h2>
+          <p class="muted">從抓取文案到設定回覆，你的內容都在自己的瀏覽器中處理。</p>
+        </div>
+        <div class="split-panel">
+          <div>
+            <h3>資料留在裝置上</h3>
+            <p class="muted">你的文案庫、收藏內容、監控規則與回覆紀錄，預設保存在 Chrome 本機。除非你主動匯出，內容不會上傳至我們的伺服器。</p>
+            <h3>Google 只負責登入</h3>
+            <p class="muted">Google 登入只用來確認你的帳號與方案。我們不要求 Google Drive 或 Google 試算表權限，也無法查看你的雲端硬碟。</p>
+            <h3>不索取 Threads 密碼</h3>
+            <p class="muted">脆文雷達使用你已登入的 Threads 網頁執行功能，不會要求、讀取或保存你的 Threads 密碼，也不會將登入 Cookie 上傳到後台。</p>
+          </div>
+          <div>
+            <h3>隨時帶走資料</h3>
+            <p class="muted">你可以隨時將文案與回覆紀錄匯出成 CSV 或 JSON。資料屬於你，也應該由你決定放在哪裡。</p>
+            <h3>刪除就是刪除</h3>
+            <p class="muted">從本機文案庫刪除內容後，資料不會留在我們的雲端備份中，因為我們一開始就沒有保存它。</p>
+            <h3>後台只保留必要資訊</h3>
+            <ul class="muted">
+              <li>Google 登入身分與會員方案。</li>
+              <li>抓取與自動回覆的使用額度。</li>
+              <li>服務運作所需的基本執行狀態。</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="download" id="download">
+      <div class="wrap">
+        <div class="download-box">
+          <div>
+            <h2>蒐集你想看的。<br>回覆你想接的。</h2>
+            <p class="muted">目前版本 v1.0.1。未登入每次可抓取 20 篇；登入後可建立文案庫、設定關鍵字探索，並為自己的貼文設定自動回覆。</p>
+          </div>
+          <div class="actions" style="margin-top:0">
+            
+              <span class="button disabled" aria-disabled="true">Chrome 商店準備中</span>
+            
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="wrap footer-inner">
+      <div><strong>脆文雷達</strong><span>不需 Meta API · 不需 Google Drive 權限 · 僅支援 Threads 網頁可見的公開內容</span><br><a href="privacy.html" target="_blank" rel="noopener">完整隱私政策 ↗</a></div>
+      <div class="footer-support">客服信箱<br><a href="mailto:uncleken@runing9to5.com">uncleken@runing9to5.com</a></div>
+    </div>
+  </footer>
+  <script>
+    document.getElementById("open-dashboard").addEventListener("click", function () {
+      window.open("dashboard.html", "_blank", "noopener");
+    });
+  </script>
+</body>
+</html>

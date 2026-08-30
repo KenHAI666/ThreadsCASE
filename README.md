@@ -1,36 +1,19 @@
-# Threads Ops
+# 脆文雷達客戶前台
 
-Threads personal analytics and scheduling MVP.
+這個 Repository 是脆文雷達的公開客戶前台，透過 GitHub Pages 提供：
 
-## Scope
+- 產品介紹與方案說明
+- 客戶主控台入口
+- 隱私政策
 
-- Login and connect a Threads account.
-- Sync personal Threads metrics.
-- Calculate dashboard performance.
-- Manage scheduled posts.
-- Keep competitor tracking out of the first build.
+Threads 文案、留言、分析、監控規則與回覆紀錄保存在使用者自己的 Chrome，不會儲存在這個 Repository。會員身分、方案與必要用量由獨立的 GAS 營運後台處理。
 
-## Local Setup
+## 頁面
 
-```bash
-npm install
-cp .env.example .env.local
-npm run dev
-```
+- `index.html`：產品首頁
+- `dashboard.html`：客戶主控台
+- `privacy.html`：隱私政策
 
-Open `http://localhost:3000`.
+## 部署
 
-Without Meta credentials, `/api/auth/threads/login` creates a demo session so the UI can be tested. After a Meta app is ready, set:
-
-```bash
-META_CLIENT_ID=
-META_CLIENT_SECRET=
-META_REDIRECT_URI=
-```
-
-## Production Pieces Still Needed
-
-- Replace the in-memory store in `src/lib/store.ts` with Supabase/Postgres.
-- Encrypt access tokens before writing them to the database.
-- Finish the real Threads token exchange in `src/lib/threads.ts`.
-- Add a cron worker to publish scheduled posts.
+GitHub Pages 請使用 `main` 分支根目錄部署。綁定自有網域後，需同步更新 Chrome 擴充功能的 `externally_connectable` 與主控台可信來源。
