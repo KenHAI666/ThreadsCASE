@@ -25,7 +25,7 @@
     </main>
   </div>
   <script>
-  const EXTENSION_IDS=["aaaihgbgeagjlblhfmacjokjemeidgnf","alkieogigpplbmifheoldfeejnmpkbmn"].filter(Boolean),$=id=>document.getElementById(id);let page="overview",snapshot=null,pendingPostUrl="";
+  const EXTENSION_IDS=["alkieogigpplbmifheoldfeejnmpkbmn","aaaihgbgeagjlblhfmacjokjemeidgnf"].filter(Boolean),$=id=>document.getElementById(id);let page="overview",snapshot=null,pendingPostUrl="";
   const titles={overview:"總覽","my-account":"我的帳號","keyword-exploration":"關鍵字探索",monitor:"監控與回覆",logs:"執行紀錄",settings:"設定與匯出"};
   const el=(tag,text,attrs={})=>{const node=document.createElement(tag);if(text!==undefined&&text!==null)node.textContent=text;Object.entries(attrs).forEach(([key,value])=>{if(key==="className")node.className=value;else if(key.startsWith("on"))node.addEventListener(key.slice(2).toLowerCase(),value);else node.setAttribute(key,value)});return node};
   function publicError(message){const text=String(message||"");return /GAS|營運後台|會員後台|回報結果/.test(text)?"同步服務暫時無法連線，請稍後再試。":text}function showError(message){$("error").textContent=publicError(message);$("error").hidden=false}function clearError(){$("error").hidden=true}
