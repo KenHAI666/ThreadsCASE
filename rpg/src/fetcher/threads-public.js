@@ -1,3 +1,5 @@
+import { parseHydrationData } from './hydration-parser.js';
+
 const THREADS_ORIGIN = 'https://www.threads.com';
 
 export function normalizeUsername(input) {
@@ -11,6 +13,8 @@ export function normalizeUsername(input) {
 
 function decodeEntities(value = '') {
   return value
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(parseInt(dec, 10)))
     .replace(/&amp;/g, '&')
     .replace(/&quot;/g, '"')
     .replace(/&#x27;/g, "'")
@@ -45,11 +49,14 @@ function collectPermalinks(html, username) {
       code,
       url: `${THREADS_ORIGIN}/@${username}/post/${code}`,
       timestamp: null,
+      timestampIso: null,
       likes: null,
       replies: null,
       reposts: null,
       quotes: null,
-      text: null
+      reshares: null,
+      text: null,
+      detectedLanguage: null
     });
   }
   return posts;
@@ -59,11 +66,19 @@ export function parsePublicProfileHtml(html, username, finalUrl) {
   const title = meta(html, 'og:title') || meta(html, 'twitter:title', 'name');
   const description = meta(html, 'og:description') || meta(html, 'description', 'name');
   const avatar = meta(html, 'og:image') || meta(html, 'twitter:image', 'name');
-  const canonical = html.match(/<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)/i)?.[1] || finalUrl;
-  const posts = collectPermalinks(html, username);
+  const canonical = decodeEntities(html.match(/<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)/i)?.[1] || finalUrl);
+  const hydration = parseHydrationData(html, username);
+  const permalinkPosts = collectPermalinks(html, username);
+
+  const hydrationByCode = new Map(hydration.posts.map((post) => [post.code, post]));
+  const mergedPosts = permalinkPosts.map((post) => ({ ...post, ...(hydrationByCode.get(post.code) || {}) }));
+
+  for (const post of hydration.posts) {
+    if (!mergedPosts.some((existing) => existing.code === post.code)) mergedPosts.push(post);
+  }
 
   return {
-    source: 'threads-public-html',
+    source: 'threads-public-html+hydration',
     fetchedAt: new Date().toISOString(),
     profile: {
       username,
@@ -71,16 +86,18 @@ export function parsePublicProfileHtml(html, username, finalUrl) {
       description,
       avatar,
       canonical,
-      followers: null
+      followers: hydration.followers
     },
-    posts,
+    posts: mergedPosts.slice(0, 30),
     diagnostics: {
       htmlBytes: Buffer.byteLength(html, 'utf8'),
-      postPermalinksFound: posts.length,
+      postPermalinksFound: permalinkPosts.length,
+      hydrationPostCount: hydration.posts.length,
+      followerCountFound: hydration.followers != null,
       hasMetaDescription: Boolean(description),
-      note: posts.length
-        ? 'Public HTML exposed post permalinks. Per-post metrics still require deeper parsing/fetching.'
-        : 'No post permalinks found in initial HTML. Browser/hydration fallback may be required.'
+      note: hydration.posts.length
+        ? 'Public HTML hydration data exposed post metrics.'
+        : 'No hydration post metrics found. Browser fallback may be required.'
     }
   };
 }
@@ -97,7 +114,7 @@ export async function fetchThreadsPublicProfile(input, options = {}) {
       signal: controller.signal,
       headers: {
         'user-agent': 'Mozilla/5.0 (compatible; ThreadsRPGPoC/0.1; +https://runing9to5.com)',
-        'accept': 'text/html,application/xhtml+xml',
+        accept: 'text/html,application/xhtml+xml',
         'accept-language': 'zh-TW,zh;q=0.9,en;q=0.7'
       }
     });
