@@ -36,27 +36,37 @@ async function findChromeExecutable() {
   return null;
 }
 
-function parseGraphqlRequest(request) {
-  const postData = request.postData() || '';
+function parseFormPostData(postData = '') {
   const form = new URLSearchParams(postData);
   let variables = null;
   let variablesParseError = null;
-
   try {
     variables = JSON.parse(form.get('variables') || 'null');
   } catch (error) {
     variablesParseError = String(error?.message || error);
   }
+  return {
+    docId: form.get('doc_id'),
+    lsd: form.get('lsd'),
+    friendlyName: form.get('fb_api_req_friendly_name'),
+    variables,
+    variablesParseError
+  };
+}
 
+function parseGraphqlRequest(request) {
+  const postData = request.postData() || '';
+  const parsed = parseFormPostData(postData);
   return {
     url: request.url(),
     method: request.method(),
-    friendlyName: request.headers()['x-fb-friendly-name'] || form.get('fb_api_req_friendly_name') || null,
-    docId: form.get('doc_id'),
-    lsd: form.get('lsd'),
-    variables,
-    variablesParseError,
-    hasAfter: Boolean(variables && typeof variables === 'object' && variables.after),
+    resourceType: request.resourceType(),
+    friendlyName: request.headers()['x-fb-friendly-name'] || parsed.friendlyName || null,
+    docId: parsed.docId,
+    lsd: parsed.lsd,
+    variables: parsed.variables,
+    variablesParseError: parsed.variablesParseError,
+    hasAfter: Boolean(parsed.variables && typeof parsed.variables === 'object' && parsed.variables.after),
     postDataBytes: Buffer.byteLength(postData, 'utf8')
   };
 }
@@ -68,12 +78,60 @@ function collectErrorMessages(value, out = [], depth = 0) {
     return out;
   }
   if (typeof value !== 'object') return out;
-
   for (const [key, child] of Object.entries(value)) {
     if (key === 'message' && typeof child === 'string') out.push(child);
     else collectErrorMessages(child, out, depth + 1);
   }
   return out;
+}
+
+function isInterestingRequest(request) {
+  const url = request.url();
+  const type = request.resourceType();
+  return request.method() === 'POST' ||
+    type === 'xhr' ||
+    type === 'fetch' ||
+    /graphql|api\/|ajax|relay|bulk-route|pagination|text_feed|threads/i.test(url);
+}
+
+function summarizeRequest(request, index) {
+  const postData = request.postData() || '';
+  const parsed = parseFormPostData(postData);
+  return {
+    index,
+    method: request.method(),
+    resourceType: request.resourceType(),
+    url: request.url(),
+    friendlyName: request.headers()['x-fb-friendly-name'] || parsed.friendlyName || null,
+    docId: parsed.docId,
+    variables: parsed.variables,
+    postDataPrefix: postData ? postData.slice(0, 400) : null
+  };
+}
+
+async function pageSnapshot(page) {
+  return page.evaluate(() => {
+    const bodyText = document.body?.innerText || '';
+    const postLinks = [...document.querySelectorAll('a[href*="/post/"]')]
+      .map((a) => a.getAttribute('href'))
+      .filter(Boolean);
+    return {
+      url: location.href,
+      title: document.title,
+      scrollY: window.scrollY,
+      scrollHeight: document.documentElement.scrollHeight,
+      innerHeight: window.innerHeight,
+      postLinkCount: new Set(postLinks).size,
+      postLinks: [...new Set(postLinks)].slice(0, 20),
+      bodyTextPreview: bodyText.slice(0, 1200),
+      signals: {
+        login: /登入|Log in|Sign in/i.test(bodyText),
+        notNow: /稍後|Not now/i.test(bodyText),
+        challenge: /challenge|驗證|verify|unusual activity/i.test(bodyText),
+        cookie: /cookie|餅乾/i.test(bodyText)
+      }
+    };
+  });
 }
 
 let chromium;
@@ -105,17 +163,25 @@ const context = await browser.newContext({
 });
 const page = await context.newPage();
 const graphqlRequests = [];
+const interestingRequests = [];
+const requestTypeCounts = {};
 const pendingResponses = [];
 
 page.on('request', (request) => {
+  const type = request.resourceType();
+  requestTypeCounts[type] = (requestTypeCounts[type] || 0) + 1;
+
+  if (isInterestingRequest(request) && interestingRequests.length < 200) {
+    interestingRequests.push(summarizeRequest(request, interestingRequests.length + 1));
+  }
+
   if (!request.url().includes('/api/graphql')) return;
-  const entry = {
+  graphqlRequests.push({
     index: graphqlRequests.length + 1,
     at: new Date().toISOString(),
     ...parseGraphqlRequest(request),
     response: null
-  };
-  graphqlRequests.push(entry);
+  });
 });
 
 page.on('response', (response) => {
@@ -141,7 +207,6 @@ page.on('response', (response) => {
         jsonParseError = String(error?.message || error);
       }
     } catch (error) {
-      text = '';
       jsonParseError = `response_read_failed: ${String(error?.message || error)}`;
     }
 
@@ -168,16 +233,22 @@ page.on('response', (response) => {
 });
 
 try {
-  await page.goto(profileUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-  await page.waitForTimeout(3000);
+  const navResponse = await page.goto(profileUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  await page.waitForTimeout(3500);
+
+  const initialSnapshot = await pageSnapshot(page);
+  const scrollSnapshots = [];
 
   for (let i = 0; i < 12; i += 1) {
-    await page.evaluate(() => window.scrollBy(0, Math.max(window.innerHeight * 0.9, 700)));
-    await page.waitForTimeout(1200);
+    await page.mouse.wheel(0, 1400);
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    await page.waitForTimeout(1400);
+    if ([0, 2, 5, 8, 11].includes(i)) scrollSnapshots.push(await pageSnapshot(page));
   }
 
   await page.waitForTimeout(3000);
   await Promise.allSettled(pendingResponses);
+  const finalSnapshot = await pageSnapshot(page);
 
   const paginationRequests = graphqlRequests.filter((entry) => entry.hasAfter);
   const profileThreadRequests = graphqlRequests.filter((entry) =>
@@ -189,6 +260,18 @@ try {
     username,
     profileUrl,
     executablePath,
+    navigation: {
+      status: navResponse?.status() ?? null,
+      finalUrl: page.url()
+    },
+    pageState: {
+      initial: initialSnapshot,
+      scrollSnapshots,
+      final: finalSnapshot
+    },
+    requestTypeCounts,
+    interestingRequestCount: interestingRequests.length,
+    interestingRequests,
     totalGraphqlRequests: graphqlRequests.length,
     paginationRequestCount: paginationRequests.length,
     profileThreadRequestCount: profileThreadRequests.length,
@@ -201,6 +284,14 @@ try {
 
   console.log(JSON.stringify({
     username,
+    navigation: report.navigation,
+    pageState: {
+      initial: report.pageState.initial,
+      final: report.pageState.final
+    },
+    requestTypeCounts: report.requestTypeCounts,
+    interestingRequestCount: report.interestingRequestCount,
+    interestingRequests: report.interestingRequests.slice(0, 40),
     totalGraphqlRequests: report.totalGraphqlRequests,
     paginationRequestCount: report.paginationRequestCount,
     profileThreadRequestCount: report.profileThreadRequestCount,
