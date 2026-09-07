@@ -8,7 +8,11 @@
     "fetch:debug": "node src/fetcher/debug.js",
     "fetch:pagination": "node src/fetcher/pagination-debug.js",
     "fetch:querymeta": "node src/fetcher/querymeta-debug.js",
+    "fetch:browser-network": "node src/fetcher/browser-network-debug.js",
     "test": "node src/fetcher/test-parser.js"
+  },
+  "dependencies": {
+    "playwright-core": "^1.55.0"
   },
   "engines": {
     "node": ">=20"
