@@ -1,0 +1,13 @@
+{
+  "name": "threads-rpg-poc",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "fetch": "node src/fetcher/cli.js",
+    "test": "node src/fetcher/test-parser.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
