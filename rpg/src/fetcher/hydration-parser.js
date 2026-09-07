@@ -4,13 +4,11 @@ function normalizeEscapedJson(source) {
   return source.includes('\\"taken_at\\"') ? source.replaceAll('\\"', '"') : source;
 }
 
-function nearestStringBefore(source, name, anchor, maxDistance = 12000) {
-  const start = Math.max(0, anchor - maxDistance);
-  const chunk = source.slice(start, anchor + 1);
+function lastString(source, name) {
   const regex = new RegExp(`"${name}"\\s*:\\s*"((?:\\\\.|[^"\\\\])*)"`, 'g');
   let match;
   let last = null;
-  while ((match = regex.exec(chunk))) last = match[1];
+  while ((match = regex.exec(source))) last = match[1];
   if (last == null) return null;
   try {
     return JSON.parse(`"${last}"`);
@@ -19,36 +17,18 @@ function nearestStringBefore(source, name, anchor, maxDistance = 12000) {
   }
 }
 
-function nearestNumberBefore(source, names, anchor, maxDistance = 12000) {
-  const start = Math.max(0, anchor - maxDistance);
-  const chunk = source.slice(start, anchor + 1);
+function lastNumber(source, names) {
   let best = null;
   let bestIndex = -1;
 
   for (const name of names) {
     const regex = new RegExp(`"${name}"\\s*:\\s*(-?\\d+(?:\\.\\d+)?)`, 'g');
     let match;
-    while ((match = regex.exec(chunk))) {
+    while ((match = regex.exec(source))) {
       if (match.index > bestIndex) {
         bestIndex = match.index;
         best = Number(match[1]);
       }
-    }
-  }
-  return best;
-}
-
-function nearestNumberAfter(source, names, anchor, maxDistance = 4000) {
-  const chunk = source.slice(anchor, Math.min(source.length, anchor + maxDistance));
-  let best = null;
-  let bestIndex = Infinity;
-
-  for (const name of names) {
-    const regex = new RegExp(`"${name}"\\s*:\\s*(-?\\d+(?:\\.\\d+)?)`, 'g');
-    const match = regex.exec(chunk);
-    if (match && match.index < bestIndex) {
-      bestIndex = match.index;
-      best = Number(match[1]);
     }
   }
   return best;
@@ -59,27 +39,39 @@ function allTakenAtIndexes(source) {
   const hits = [];
   let match;
   while ((match = regex.exec(source))) {
-    hits.push({ index: match.index, timestamp: Number(match[1]) });
+    hits.push({ index: match.index, timestamp: Number(match[1]), end: regex.lastIndex });
   }
   return hits;
 }
 
+function segmentForPost(source, hits, index) {
+  // Threads hydration objects observed so far place a post's fields before its taken_at.
+  // Bound the search to the region after the previous post's taken_at so values from
+  // neighboring posts cannot bleed into the current record.
+  const start = index === 0 ? Math.max(0, hits[index].index - 16000) : hits[index - 1].end;
+  const end = hits[index].end;
+  return source.slice(start, end);
+}
+
 export function parseHydrationData(html, username) {
   const source = normalizeEscapedJson(html);
+  const hits = allTakenAtIndexes(source);
   const seen = new Set();
   const posts = [];
 
-  for (const hit of allTakenAtIndexes(source)) {
-    const code = nearestStringBefore(source, 'code', hit.index);
+  for (let i = 0; i < hits.length; i += 1) {
+    const hit = hits[i];
+    const segment = segmentForPost(source, hits, i);
+    const code = lastString(segment, 'code');
     if (!code || seen.has(code)) continue;
 
-    const text = nearestStringBefore(source, 'text', hit.index) || nearestStringBefore(source, 'caption_text', hit.index);
-    const likes = nearestNumberBefore(source, ['like_count'], hit.index) ?? nearestNumberAfter(source, ['like_count'], hit.index);
-    const replies = nearestNumberBefore(source, ['direct_reply_count', 'reply_count'], hit.index) ?? nearestNumberAfter(source, ['direct_reply_count', 'reply_count'], hit.index);
-    const reposts = nearestNumberBefore(source, ['repost_count'], hit.index) ?? nearestNumberAfter(source, ['repost_count'], hit.index);
-    const quotes = nearestNumberBefore(source, ['quote_count'], hit.index) ?? nearestNumberAfter(source, ['quote_count'], hit.index);
-    const reshares = nearestNumberBefore(source, ['reshare_count'], hit.index) ?? nearestNumberAfter(source, ['reshare_count'], hit.index);
-    const detectedLanguage = nearestStringBefore(source, 'detected_language', hit.index, 3000);
+    const text = lastString(segment, 'text') || lastString(segment, 'caption_text');
+    const likes = lastNumber(segment, ['like_count']);
+    const replies = lastNumber(segment, ['direct_reply_count', 'reply_count']);
+    const reposts = lastNumber(segment, ['repost_count']);
+    const quotes = lastNumber(segment, ['quote_count']);
+    const reshares = lastNumber(segment, ['reshare_count']);
+    const detectedLanguage = lastString(segment, 'detected_language');
 
     seen.add(code);
     posts.push({
@@ -104,7 +96,7 @@ export function parseHydrationData(html, username) {
     posts: posts.slice(0, 30),
     followers,
     diagnostics: {
-      takenAtCount: allTakenAtIndexes(source).length,
+      takenAtCount: hits.length,
       parsedPostCount: posts.length,
       followerCountFound: followers != null
     }
