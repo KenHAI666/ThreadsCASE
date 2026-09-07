@@ -7,6 +7,7 @@
     "fetch": "node src/fetcher/cli.js",
     "fetch:debug": "node src/fetcher/debug.js",
     "fetch:pagination": "node src/fetcher/pagination-debug.js",
+    "fetch:querymeta": "node src/fetcher/querymeta-debug.js",
     "test": "node src/fetcher/test-parser.js"
   },
   "engines": {
