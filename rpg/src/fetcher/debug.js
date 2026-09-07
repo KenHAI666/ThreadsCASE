@@ -21,8 +21,11 @@ await mkdir(new URL('../../debug/', import.meta.url), { recursive: true });
 const htmlPath = new URL(`../../debug/${username}.html`, import.meta.url);
 const reportPath = new URL(`../../debug/${username}.report.json`, import.meta.url);
 const candidatesPath = new URL(`../../debug/${username}.candidates.json`, import.meta.url);
-
 await writeFile(htmlPath, html, 'utf8');
+
+// Threads sometimes embeds hydration JSON as escaped JSON inside script payloads.
+// For debug extraction we create a tolerant view with escaped quotes normalized.
+const parseSource = html.replace(/\\"/g, '"');
 
 const probes = [
   'like_count',
@@ -52,97 +55,106 @@ function findOccurrences(source, needle, context = 180) {
   return hits;
 }
 
-function firstMatch(source, patterns) {
-  for (const pattern of patterns) {
-    const match = source.match(pattern);
-    if (match) return match[1] ?? null;
+function numberField(source, name) {
+  const key = `"${name}"`;
+  const keyIndex = source.indexOf(key);
+  if (keyIndex === -1) return null;
+  const colonIndex = source.indexOf(':', keyIndex + key.length);
+  if (colonIndex === -1) return null;
+  const tail = source.slice(colonIndex + 1, colonIndex + 80);
+  const match = tail.match(/^\s*(-?\d+(?:\.\d+)?)/);
+  return match ? Number(match[1]) : null;
+}
+
+function stringField(source, name) {
+  const key = `"${name}"`;
+  const keyIndex = source.indexOf(key);
+  if (keyIndex === -1) return null;
+  const colonIndex = source.indexOf(':', keyIndex + key.length);
+  if (colonIndex === -1) return null;
+  const tail = source.slice(colonIndex + 1);
+  const firstQuote = tail.indexOf('"');
+  if (firstQuote === -1) return null;
+  let escaped = false;
+  let value = '';
+  for (let i = firstQuote + 1; i < tail.length; i += 1) {
+    const ch = tail[i];
+    if (escaped) {
+      value += ch;
+      escaped = false;
+      continue;
+    }
+    if (ch === '\\') {
+      value += ch;
+      escaped = true;
+      continue;
+    }
+    if (ch === '"') break;
+    value += ch;
+    if (value.length > 10000) break;
   }
-  return null;
-}
-
-function numberMatch(source, names) {
-  const patterns = names.flatMap((name) => [
-    new RegExp(`"${name}"\\s*:\\s*(-?\\d+(?:\\.\\d+)?)`),
-    new RegExp(`\\\\"${name}\\\\"\\s*:\\s*(-?\\d+(?:\\.\\d+)?)`)
-  ]);
-  const raw = firstMatch(source, patterns);
-  return raw == null ? null : Number(raw);
-}
-
-function stringMatch(source, names) {
-  const patterns = names.flatMap((name) => [
-    new RegExp(`"${name}"\\s*:\\s*"((?:\\\\.|[^"\\\\])*)"`),
-    new RegExp(`\\\\"${name}\\\\"\\s*:\\s*\\\\"((?:\\\\\\\\.|[^\\\\"])*)\\\\"`)
-  ]);
-  const raw = firstMatch(source, patterns);
-  if (raw == null) return null;
   try {
-    return JSON.parse(`"${raw.replace(/"/g, '\\"')}"`);
+    return JSON.parse(`"${value.replace(/"/g, '\\"')}"`);
   } catch {
-    return raw;
+    return value;
   }
 }
 
-function findTakenAtIndexes(source) {
-  const indexes = new Set();
-  for (const needle of ['"taken_at":', '\\"taken_at\\":']) {
-    let index = 0;
-    while ((index = source.indexOf(needle, index)) !== -1) {
-      indexes.add(index);
-      index += needle.length;
-    }
+function allIndexes(source, needle) {
+  const indexes = [];
+  let index = 0;
+  while ((index = source.indexOf(needle, index)) !== -1) {
+    indexes.push(index);
+    index += needle.length;
   }
-  return [...indexes].sort((a, b) => a - b);
+  return indexes;
 }
 
-function extractCandidateWindows(source) {
-  const windows = [];
-  const seen = new Set();
-
-  for (const index of findTakenAtIndexes(source)) {
-    const start = Math.max(0, index - 9000);
-    const end = Math.min(source.length, index + 5000);
-    const chunk = source.slice(start, end);
-    const takenAt = numberMatch(chunk, ['taken_at']);
-    const code = stringMatch(chunk, ['code']);
-    const id = stringMatch(chunk, ['pk', 'id']);
-    const key = `${takenAt || index}:${code || id || 'unknown'}`;
-
-    if (!seen.has(key)) {
-      seen.add(key);
-      windows.push({ index, chunk });
-    }
-  }
-
-  return windows;
+function nearestFieldWindow(source, centerIndex) {
+  // In current Threads HTML, metrics and caption for one media object occur
+  // before taken_at. Keep the window narrower than the gap to neighbouring posts.
+  const start = Math.max(0, centerIndex - 6500);
+  const end = Math.min(source.length, centerIndex + 1200);
+  return source.slice(start, end);
 }
 
-function normalizeCandidate({ index, chunk }) {
-  const code = stringMatch(chunk, ['code']);
-  const text = stringMatch(chunk, ['text']);
-  const captionText = stringMatch(chunk, ['caption_text']);
-  const takenAt = numberMatch(chunk, ['taken_at']);
+function lastNumberField(source, name) {
+  const matches = [...source.matchAll(new RegExp(`"${name}"\\s*:\\s*(-?\\d+(?:\\.\\d+)?)`, 'g'))];
+  if (!matches.length) return null;
+  return Number(matches.at(-1)[1]);
+}
+
+function lastStringField(source, name) {
+  const key = `"${name}"`;
+  const index = source.lastIndexOf(key);
+  if (index === -1) return null;
+  return stringField(source.slice(index), name);
+}
+
+const takenAtIndexes = allIndexes(parseSource, '"taken_at"');
+const candidates = takenAtIndexes.map((index) => {
+  const window = nearestFieldWindow(parseSource, index);
+  const takenSlice = parseSource.slice(index, index + 120);
+  const takenAt = numberField(takenSlice, 'taken_at');
+  const code = lastStringField(window, 'code');
+  const text = lastStringField(window, 'text') || lastStringField(window, 'caption_text');
 
   return {
     sourceIndex: index,
     code,
-    id: stringMatch(chunk, ['pk', 'id']),
-    text: text || captionText,
+    id: lastStringField(window, 'pk') || lastStringField(window, 'id'),
+    text,
     timestamp: takenAt,
     timestampIso: takenAt ? new Date(takenAt * 1000).toISOString() : null,
-    likes: numberMatch(chunk, ['like_count']),
-    replies: numberMatch(chunk, ['direct_reply_count', 'reply_count']),
-    reposts: numberMatch(chunk, ['repost_count']),
-    quotes: numberMatch(chunk, ['quote_count']),
-    reshares: numberMatch(chunk, ['reshare_count']),
-    detectedLanguage: stringMatch(chunk, ['detected_language']),
+    likes: lastNumberField(window, 'like_count'),
+    replies: lastNumberField(window, 'direct_reply_count') ?? lastNumberField(window, 'reply_count'),
+    reposts: lastNumberField(window, 'repost_count'),
+    quotes: lastNumberField(window, 'quote_count'),
+    reshares: lastNumberField(window, 'reshare_count'),
+    detectedLanguage: lastStringField(window, 'detected_language'),
     url: code ? `${THREADS_ORIGIN}/@${username}/post/${code}` : null
   };
-}
-
-const candidates = extractCandidateWindows(html)
-  .map(normalizeCandidate)
-  .filter((candidate) => candidate.timestamp || candidate.likes != null || candidate.code);
+}).filter((candidate) => candidate.timestamp != null);
 
 const scriptPattern = new RegExp('<script\\b[^>]*>([\\s\\S]*?)<\\/script>', 'gi');
 const scripts = [...html.matchAll(scriptPattern)].map((match, i) => ({
@@ -158,6 +170,8 @@ const report = {
   status: response.status,
   ok: response.ok,
   htmlBytes: Buffer.byteLength(html, 'utf8'),
+  normalizedHtmlBytes: Buffer.byteLength(parseSource, 'utf8'),
+  takenAtIndexes,
   scripts,
   probes: Object.fromEntries(probes.map((probe) => [probe, findOccurrences(html, probe)]))
 };
@@ -172,6 +186,7 @@ console.log(JSON.stringify({
   htmlFile: `debug/${username}.html`,
   reportFile: `debug/${username}.report.json`,
   candidatesFile: `debug/${username}.candidates.json`,
+  takenAtIndexCount: takenAtIndexes.length,
   candidateCount: candidates.length,
   candidates,
   probeCounts: Object.fromEntries(Object.entries(report.probes).map(([key, hits]) => [key, hits.length]))
