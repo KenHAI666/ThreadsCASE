@@ -10,7 +10,7 @@ const response = await fetch(url, {
   redirect: 'follow',
   headers: {
     'user-agent': 'Mozilla/5.0 (compatible; ThreadsRPGPoC/0.1; +https://runing9to5.com)',
-    'accept': 'text/html,application/xhtml+xml',
+    accept: 'text/html,application/xhtml+xml',
     'accept-language': 'zh-TW,zh;q=0.9,en;q=0.7'
   }
 });
@@ -144,6 +144,13 @@ const candidates = extractCandidateWindows(html)
   .map(normalizeCandidate)
   .filter((candidate) => candidate.timestamp || candidate.likes != null || candidate.code);
 
+const scriptPattern = new RegExp('<script\\b[^>]*>([\\s\\S]*?)<\\/script>', 'gi');
+const scripts = [...html.matchAll(scriptPattern)].map((match, i) => ({
+  index: i,
+  bytes: Buffer.byteLength(match[1] || '', 'utf8'),
+  hasJsonLikeData: (match[1] || '').includes('{')
+}));
+
 const report = {
   fetchedAt: new Date().toISOString(),
   username,
@@ -151,11 +158,7 @@ const report = {
   status: response.status,
   ok: response.ok,
   htmlBytes: Buffer.byteLength(html, 'utf8'),
-  scripts: [...html.matchAll(/<script\\b[^>]*>([\\s\\S]*?)<\\/script>/gi)].map((match, i) => ({
-    index: i,
-    bytes: Buffer.byteLength(match[1] || '', 'utf8'),
-    hasJsonLikeData: /\\{[\\s\\S]*\\}/.test(match[1] || '')
-  })),
+  scripts,
   probes: Object.fromEntries(probes.map((probe) => [probe, findOccurrences(html, probe)]))
 };
 
