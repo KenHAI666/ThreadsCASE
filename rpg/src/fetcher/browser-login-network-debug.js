@@ -188,32 +188,58 @@ async function pageState() {
   }));
 }
 
+async function authState() {
+  const cookies = await context.cookies(['https://www.threads.com', 'https://www.instagram.com']);
+  const names = [...new Set(cookies.map((cookie) => cookie.name))];
+  return {
+    authenticated: names.includes('sessionid') || names.includes('ds_user_id'),
+    authCookieNames: names.filter((name) => ['sessionid', 'ds_user_id'].includes(name))
+  };
+}
+
+async function waitForLogin() {
+  let auth = await authState();
+  if (auth.authenticated) return auth;
+
+  console.log('\n這個研究 Chrome 尚未登入 Threads / Instagram。');
+  console.log('請在剛開啟的 Chrome 視窗完成登入；腳本只檢查登入 Cookie 名稱，不讀取或輸出 Cookie 值。');
+  console.log('登入完成後不用關閉視窗，腳本會自動回到目標 Threads 個人頁。最多等待 240 秒。\n');
+
+  const deadline = Date.now() + 240000;
+  while (Date.now() < deadline) {
+    await page.waitForTimeout(2000);
+    auth = await authState();
+    if (auth.authenticated) return auth;
+  }
+  throw new Error('login_not_detected_after_240s');
+}
+
 try {
   await page.goto(profileUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-  await page.waitForTimeout(2500);
+  await page.waitForTimeout(2000);
 
-  let state = await pageState();
-  if (state.postLinkCount < 3) {
-    console.log('\nThreads 目前需要登入。請在剛開啟的 Chrome 視窗手動登入。');
-    console.log('這個 Chrome 使用獨立的 debug 研究 profile；密碼/Cookie 不會寫進 report，也不會進 Git。');
-    console.log('登入後回到目標 Threads 個人頁即可。腳本最多等待 180 秒。\n');
+  const auth = await waitForLogin();
 
-    const deadline = Date.now() + 180000;
-    while (Date.now() < deadline) {
-      await page.waitForTimeout(2000);
-      state = await pageState();
-      if (state.postLinkCount >= 3) break;
-    }
+  // The logged-out SSR page can expose several post links even though scrolling
+  // still redirects to Instagram SSO. Always navigate back after auth is proven.
+  await page.goto(profileUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  await page.waitForTimeout(3000);
+
+  const readyState = await pageState();
+  if (readyState.postLinkCount < 3 || !readyState.href.includes(`/@${username}`)) {
+    throw new Error(`authenticated_profile_not_ready: ${readyState.href}`);
   }
 
-  if ((await pageState()).postLinkCount < 3) {
-    throw new Error('login_or_profile_content_not_ready_after_180s');
-  }
+  // Drop login/navigation traffic so the report focuses on profile pagination.
+  graphqlRequests.length = 0;
+  interestingRequests.length = 0;
+  pendingResponses.length = 0;
 
   const beforeScroll = await pageState();
   for (let i = 0; i < 18; i += 1) {
     await page.evaluate(() => window.scrollBy(0, Math.max(window.innerHeight * 0.95, 750)));
     await page.waitForTimeout(1000);
+    if (!page.url().includes('threads.com/@')) break;
   }
   await page.waitForTimeout(3000);
   await Promise.allSettled(pendingResponses);
@@ -229,7 +255,11 @@ try {
     username,
     profileUrl,
     researchOnly: true,
-    note: 'Logged-in browser is used only to observe request shape. Cookies and request headers are intentionally not stored.',
+    note: 'Logged-in browser is used only to observe request shape. Cookie values and request headers are intentionally not stored.',
+    auth: {
+      authenticated: auth.authenticated,
+      authCookieNames: auth.authCookieNames
+    },
     beforeScroll,
     afterScroll,
     totalGraphqlRequests: graphqlRequests.length,
@@ -245,6 +275,7 @@ try {
 
   console.log(JSON.stringify({
     username,
+    auth: report.auth,
     beforeScroll,
     afterScroll,
     totalGraphqlRequests: report.totalGraphqlRequests,
@@ -264,7 +295,8 @@ try {
       docId: entry.docId,
       variables: entry.variables,
       response: entry.response
-    }))
+    })),
+    interestingRequests: report.interestingRequests.slice(-40)
   }, null, 2));
 } finally {
   await context.close();
