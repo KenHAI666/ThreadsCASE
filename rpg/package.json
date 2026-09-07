@@ -10,6 +10,7 @@
     "fetch:querymeta": "node src/fetcher/querymeta-debug.js",
     "fetch:browser-network": "node src/fetcher/browser-network-debug.js",
     "fetch:browser-login-network": "node src/fetcher/browser-login-network-debug.js",
+    "analyze:browser-network": "node src/fetcher/analyze-browser-network.js",
     "test": "node src/fetcher/test-parser.js"
   },
   "dependencies": {
