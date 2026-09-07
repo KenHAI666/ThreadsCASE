@@ -61,40 +61,57 @@ function firstMatch(source, patterns) {
 }
 
 function numberMatch(source, names) {
-  const patterns = names.map((name) => new RegExp(`\\"${name}\\":(-?\\d+(?:\\.\\d+)?)`));
+  const patterns = names.flatMap((name) => [
+    new RegExp(`"${name}"\\s*:\\s*(-?\\d+(?:\\.\\d+)?)`),
+    new RegExp(`\\\\"${name}\\\\"\\s*:\\s*(-?\\d+(?:\\.\\d+)?)`)
+  ]);
   const raw = firstMatch(source, patterns);
   return raw == null ? null : Number(raw);
 }
 
 function stringMatch(source, names) {
-  const patterns = names.map((name) => new RegExp(`\\"${name}\\":\\"((?:\\\\.|[^\\"])*)\\"`));
+  const patterns = names.flatMap((name) => [
+    new RegExp(`"${name}"\\s*:\\s*"((?:\\\\.|[^"\\\\])*)"`),
+    new RegExp(`\\\\"${name}\\\\"\\s*:\\s*\\\\"((?:\\\\\\\\.|[^\\\\"])*)\\\\"`)
+  ]);
   const raw = firstMatch(source, patterns);
   if (raw == null) return null;
   try {
-    return JSON.parse(`\"${raw}\"`);
+    return JSON.parse(`"${raw.replace(/"/g, '\\"')}"`);
   } catch {
     return raw;
   }
 }
 
+function findTakenAtIndexes(source) {
+  const indexes = new Set();
+  for (const needle of ['"taken_at":', '\\"taken_at\\":']) {
+    let index = 0;
+    while ((index = source.indexOf(needle, index)) !== -1) {
+      indexes.add(index);
+      index += needle.length;
+    }
+  }
+  return [...indexes].sort((a, b) => a - b);
+}
+
 function extractCandidateWindows(source) {
   const windows = [];
   const seen = new Set();
-  let index = 0;
 
-  while ((index = source.indexOf('\\"taken_at\\":', index)) !== -1) {
-    const start = Math.max(0, index - 7000);
-    const end = Math.min(source.length, index + 7000);
+  for (const index of findTakenAtIndexes(source)) {
+    const start = Math.max(0, index - 9000);
+    const end = Math.min(source.length, index + 5000);
     const chunk = source.slice(start, end);
-
+    const takenAt = numberMatch(chunk, ['taken_at']);
     const code = stringMatch(chunk, ['code']);
     const id = stringMatch(chunk, ['pk', 'id']);
-    const key = `${code || 'nocode'}:${id || index}`;
+    const key = `${takenAt || index}:${code || id || 'unknown'}`;
+
     if (!seen.has(key)) {
       seen.add(key);
       windows.push({ index, chunk });
     }
-    index += 10;
   }
 
   return windows;
@@ -134,10 +151,10 @@ const report = {
   status: response.status,
   ok: response.ok,
   htmlBytes: Buffer.byteLength(html, 'utf8'),
-  scripts: [...html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)].map((match, i) => ({
+  scripts: [...html.matchAll(/<script\\b[^>]*>([\\s\\S]*?)<\\/script>/gi)].map((match, i) => ({
     index: i,
     bytes: Buffer.byteLength(match[1] || '', 'utf8'),
-    hasJsonLikeData: /\{[\s\S]*\}/.test(match[1] || '')
+    hasJsonLikeData: /\\{[\\s\\S]*\\}/.test(match[1] || '')
   })),
   probes: Object.fromEntries(probes.map((probe) => [probe, findOccurrences(html, probe)]))
 };
