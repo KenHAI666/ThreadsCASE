@@ -4,6 +4,7 @@ import { normalizeUsername } from './threads-public.js';
 const THREADS_ORIGIN = 'https://www.threads.com';
 const GRAPHQL_URL = `${THREADS_ORIGIN}/api/graphql`;
 const PROFILE_THREADS_DOC_ID = '33773912952222602';
+const CRAWLER_UA = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)';
 const input = process.argv[2] || '@runing_9to5';
 const username = normalizeUsername(input);
 const url = `${THREADS_ORIGIN}/@${encodeURIComponent(username)}`;
@@ -152,6 +153,16 @@ function inspectGraphqlText(text, contentType) {
   };
 }
 
+function relayProviderVars() {
+  return {
+    __relay_internal__pv__BarcelonaIsLoggedInrelayprovider: false,
+    __relay_internal__pv__BarcelonaIsInternalUserrelayprovider: false,
+    __relay_internal__pv__BarcelonaIsCrawlerrelayprovider: true,
+    __relay_internal__pv__BarcelonaOptionalCookiesEnabledrelayprovider: true,
+    __relay_internal__pv__BarcelonaIsLoggedOutrelayprovider: true
+  };
+}
+
 async function tryGraphqlPage({ userId, cursor, lsd }) {
   if (!userId || !cursor || !lsd) {
     return {
@@ -160,41 +171,39 @@ async function tryGraphqlPage({ userId, cursor, lsd }) {
     };
   }
 
-  const variableCandidates = [
-    { userID: userId, after: cursor, first: 12 },
-    { userID: userId, after: cursor },
-    {
-      userID: userId,
-      after: cursor,
-      before: null,
-      first: 12,
-      last: null,
-      __relay_internal__pv__BarcelonaIsLoggedInrelayprovider: false
-    }
+  const variables = {
+    userID: userId,
+    after: cursor,
+    ...relayProviderVars()
+  };
+
+  const requestCandidates = [
+    { label: 'page-lsd', requestLsd: lsd, variables },
+    { label: 'static-lsd-t', requestLsd: 't', variables }
   ];
 
   const attempts = [];
 
-  for (let attemptIndex = 0; attemptIndex < variableCandidates.length; attemptIndex += 1) {
-    const variables = variableCandidates[attemptIndex];
+  for (let attemptIndex = 0; attemptIndex < requestCandidates.length; attemptIndex += 1) {
+    const candidate = requestCandidates[attemptIndex];
     const body = new URLSearchParams();
-    body.set('lsd', lsd);
+    body.set('lsd', candidate.requestLsd);
     body.set('doc_id', PROFILE_THREADS_DOC_ID);
-    body.set('variables', JSON.stringify(variables));
+    body.set('variables', JSON.stringify(candidate.variables));
 
     try {
       const graphqlResponse = await fetch(GRAPHQL_URL, {
         method: 'POST',
         redirect: 'follow',
         headers: {
-          'user-agent': 'Mozilla/5.0 (compatible; ThreadsRPGPoC/0.1; +https://runing9to5.com)',
+          'user-agent': CRAWLER_UA,
           accept: '*/*',
           'accept-language': 'zh-TW,zh;q=0.9,en;q=0.7',
           'content-type': 'application/x-www-form-urlencoded',
           origin: THREADS_ORIGIN,
           referer: url,
           'x-fb-friendly-name': 'BarcelonaProfileThreadsTabQuery',
-          'x-fb-lsd': lsd,
+          'x-fb-lsd': candidate.requestLsd,
           'x-ig-app-id': '238260118697367'
         },
         body
@@ -207,7 +216,9 @@ async function tryGraphqlPage({ userId, cursor, lsd }) {
 
       attempts.push({
         attempt: attemptIndex + 1,
-        variables,
+        label: candidate.label,
+        variables: candidate.variables,
+        lsdMode: candidate.requestLsd === 't' ? 'static-t' : 'page-token',
         status: graphqlResponse.status,
         ok: graphqlResponse.ok,
         bytes: Buffer.byteLength(text, 'utf8'),
@@ -217,7 +228,12 @@ async function tryGraphqlPage({ userId, cursor, lsd }) {
 
       if (graphqlResponse.ok && inspection.postCodeCount) break;
     } catch (error) {
-      attempts.push({ attempt: attemptIndex + 1, variables, error: String(error?.message || error) });
+      attempts.push({
+        attempt: attemptIndex + 1,
+        label: candidate.label,
+        variables: candidate.variables,
+        error: String(error?.message || error)
+      });
     }
   }
 
