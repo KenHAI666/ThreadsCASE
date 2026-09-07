@@ -6,7 +6,7 @@
   "scripts": {
     "fetch": "node src/fetcher/cli.js",
     "fetch:30": "node src/fetcher/fetch30-browser.js",
-    "fetch:30-http": "node src/fetcher/fetch30-http.js",
+    "fetch:30-http": "node src/fetcher/fetch30-http-v2.js",
     "analyze:30": "node src/scoring/analyze30.js",
     "web": "node server.js",
     "fetch:debug": "node src/fetcher/debug.js",
