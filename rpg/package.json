@@ -6,6 +6,7 @@
   "scripts": {
     "fetch": "node src/fetcher/cli.js",
     "fetch:debug": "node src/fetcher/debug.js",
+    "fetch:pagination": "node src/fetcher/pagination-debug.js",
     "test": "node src/fetcher/test-parser.js"
   },
   "engines": {
