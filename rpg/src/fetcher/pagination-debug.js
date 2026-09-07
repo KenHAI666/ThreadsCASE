@@ -22,7 +22,6 @@ const source = html.replaceAll('\\"', '"');
 
 await mkdir(new URL('../../debug/', import.meta.url), { recursive: true });
 const reportPath = new URL(`../../debug/${username}.pagination.json`, import.meta.url);
-const probeResponsePath = new URL(`../../debug/${username}.pagination-probe.txt`, import.meta.url);
 
 const probeNames = [
   'end_cursor',
@@ -84,6 +83,75 @@ function extractLsdToken(text) {
   ]);
 }
 
+function stripJsonGuard(text) {
+  return text.replace(/^\s*for\s*\(;;\);\s*/, '').trim();
+}
+
+function collectErrorMessages(value, output = [], depth = 0) {
+  if (depth > 8 || output.length >= 20 || value == null) return output;
+  if (typeof value === 'string') return output;
+  if (Array.isArray(value)) {
+    for (const item of value) collectErrorMessages(item, output, depth + 1);
+    return output;
+  }
+  if (typeof value !== 'object') return output;
+
+  for (const [key, child] of Object.entries(value)) {
+    if (['message', 'error_user_msg', 'errorSummary', 'errorDescription'].includes(key) && typeof child === 'string') {
+      output.push(child);
+    } else {
+      collectErrorMessages(child, output, depth + 1);
+    }
+  }
+  return output;
+}
+
+function inspectGraphqlText(text, contentType) {
+  const normalized = text.replaceAll('\\"', '"');
+  const guarded = stripJsonGuard(text);
+  let parsed = null;
+  let jsonParseError = null;
+
+  try {
+    parsed = JSON.parse(guarded);
+  } catch (error) {
+    jsonParseError = String(error?.message || error);
+  }
+
+  const postCodes = unique([
+    ...[...normalized.matchAll(/"code"\s*:\s*"([A-Za-z0-9_-]+)"/g)].map((m) => m[1]),
+    ...[...normalized.matchAll(/\\"code\\"\s*:\s*\\"([A-Za-z0-9_-]+)\\"/g)].map((m) => m[1])
+  ]);
+  const nextCursor = firstMatch(normalized, [
+    /"end_cursor"\s*:\s*"([^"]+)"/,
+    /"next_cursor"\s*:\s*"([^"]+)"/
+  ]);
+  const hasNext = normalized.match(/"has_next_page"\s*:\s*(true|false)/)?.[1] ?? null;
+
+  return {
+    contentType: contentType || null,
+    looksLikeHtml: /^\s*<!doctype html|^\s*<html/i.test(text),
+    responsePrefix: text.slice(0, 220),
+    jsonParsed: Boolean(parsed),
+    jsonParseError,
+    topLevelKeys: parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? Object.keys(parsed).slice(0, 30) : [],
+    errorMessages: unique(collectErrorMessages(parsed)).slice(0, 20),
+    postCodeCount: postCodes.length,
+    postCodes: postCodes.slice(0, 20),
+    nextCursor,
+    hasNextPage: hasNext == null ? null : hasNext === 'true',
+    fieldSignals: {
+      data: normalized.includes('"data"'),
+      errors: normalized.includes('"errors"'),
+      code: normalized.includes('"code"'),
+      takenAt: normalized.includes('"taken_at"'),
+      threadItems: normalized.includes('thread_items'),
+      pageInfo: normalized.includes('page_info'),
+      endCursor: normalized.includes('end_cursor')
+    }
+  };
+}
+
 async function tryGraphqlPage({ userId, cursor, lsd }) {
   if (!userId || !cursor || !lsd) {
     return {
@@ -107,7 +175,8 @@ async function tryGraphqlPage({ userId, cursor, lsd }) {
 
   const attempts = [];
 
-  for (const variables of variableCandidates) {
+  for (let attemptIndex = 0; attemptIndex < variableCandidates.length; attemptIndex += 1) {
+    const variables = variableCandidates[attemptIndex];
     const body = new URLSearchParams();
     body.set('lsd', lsd);
     body.set('doc_id', PROFILE_THREADS_DOC_ID);
@@ -132,32 +201,23 @@ async function tryGraphqlPage({ userId, cursor, lsd }) {
       });
 
       const text = await graphqlResponse.text();
-      const normalized = text.replaceAll('\\"', '"');
-      const postCodes = unique([...normalized.matchAll(/"code"\s*:\s*"([A-Za-z0-9_-]+)"/g)].map((m) => m[1]));
-      const nextCursor = firstMatch(normalized, [
-        /"end_cursor"\s*:\s*"([^"]+)"/,
-        /"next_cursor"\s*:\s*"([^"]+)"/
-      ]);
-      const hasNext = normalized.match(/"has_next_page"\s*:\s*(true|false)/)?.[1] ?? null;
+      const inspection = inspectGraphqlText(text, graphqlResponse.headers.get('content-type'));
+      const probePath = new URL(`../../debug/${username}.pagination-probe-${attemptIndex + 1}.txt`, import.meta.url);
+      await writeFile(probePath, text, 'utf8');
 
       attempts.push({
+        attempt: attemptIndex + 1,
         variables,
         status: graphqlResponse.status,
         ok: graphqlResponse.ok,
         bytes: Buffer.byteLength(text, 'utf8'),
-        postCodeCount: postCodes.length,
-        postCodes: postCodes.slice(0, 20),
-        nextCursor,
-        hasNextPage: hasNext == null ? null : hasNext === 'true',
-        preview: text.slice(0, 600)
+        probeFile: `debug/${username}.pagination-probe-${attemptIndex + 1}.txt`,
+        ...inspection
       });
 
-      if (graphqlResponse.ok && postCodes.length) {
-        await writeFile(probeResponsePath, text, 'utf8');
-        break;
-      }
+      if (graphqlResponse.ok && inspection.postCodeCount) break;
     } catch (error) {
-      attempts.push({ variables, error: String(error?.message || error) });
+      attempts.push({ attempt: attemptIndex + 1, variables, error: String(error?.message || error) });
     }
   }
 
@@ -242,7 +302,6 @@ console.log(JSON.stringify({
   status: response.status,
   htmlBytes: report.htmlBytes,
   reportFile: `debug/${username}.pagination.json`,
-  probeResponseFile: graphqlProbe.attempted ? `debug/${username}.pagination-probe.txt` : null,
   ...report.summary,
   cursors: report.cursors,
   docIds: report.docIds,
