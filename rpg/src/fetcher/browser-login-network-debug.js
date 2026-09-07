@@ -37,6 +37,42 @@ async function findChromeExecutable() {
   return null;
 }
 
+function isGraphqlRequestUrl(url) {
+  try {
+    const parsed = new URL(url);
+    return parsed.hostname.endsWith('threads.com') &&
+      (parsed.pathname === '/api/graphql' || parsed.pathname === '/graphql/query');
+  } catch {
+    return false;
+  }
+}
+
+function graphqlEndpoint(url) {
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return null;
+  }
+}
+
+function findNestedValue(value, key, depth = 0) {
+  if (value == null || depth > 8) return null;
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findNestedValue(item, key, depth + 1);
+      if (found != null) return found;
+    }
+    return null;
+  }
+  if (typeof value !== 'object') return null;
+  if (Object.prototype.hasOwnProperty.call(value, key)) return value[key];
+  for (const child of Object.values(value)) {
+    const found = findNestedValue(child, key, depth + 1);
+    if (found != null) return found;
+  }
+  return null;
+}
+
 function parseGraphqlRequest(request) {
   const postData = request.postData() || '';
   const form = new URLSearchParams(postData);
@@ -49,15 +85,28 @@ function parseGraphqlRequest(request) {
     variablesParseError = String(error?.message || error);
   }
 
+  const after = findNestedValue(variables, 'after');
+  const before = findNestedValue(variables, 'before');
+  const first = findNestedValue(variables, 'first');
+  const last = findNestedValue(variables, 'last');
+
   return {
+    endpoint: graphqlEndpoint(request.url()),
     method: request.method(),
     resourceType: request.resourceType(),
     friendlyName: request.headers()['x-fb-friendly-name'] || form.get('fb_api_req_friendly_name') || null,
     docId: form.get('doc_id'),
     lsdMode: form.get('lsd') ? 'present' : 'missing',
+    formKeys: [...new Set([...form.keys()])].sort(),
     variables,
     variablesParseError,
-    hasAfter: Boolean(variables && typeof variables === 'object' && variables.after),
+    pagination: {
+      after: after ?? null,
+      before: before ?? null,
+      first: first ?? null,
+      last: last ?? null
+    },
+    hasAfter: typeof after === 'string' && after.length > 0,
     postDataBytes: Buffer.byteLength(postData, 'utf8')
   };
 }
@@ -106,7 +155,8 @@ async function inspectResponse(response) {
     postCodeCount: postCodes.length,
     postCodes: postCodes.slice(0, 30),
     nextCursor: cursorMatch?.[1] || null,
-    hasNextPage: nextMatch ? nextMatch[1] === 'true' : null
+    hasNextPage: nextMatch ? nextMatch[1] === 'true' : null,
+    responsePrefix: text.slice(0, 220)
   };
 }
 
@@ -141,6 +191,7 @@ const page = context.pages()[0] || await context.newPage();
 const graphqlRequests = [];
 const interestingRequests = [];
 const pendingResponses = [];
+const requestEntries = new Map();
 
 page.on('request', (request) => {
   const url = request.url();
@@ -155,23 +206,22 @@ page.on('request', (request) => {
     });
   }
 
-  if (!url.includes('/api/graphql')) return;
-  graphqlRequests.push({
+  if (!isGraphqlRequestUrl(url)) return;
+  const entry = {
     index: graphqlRequests.length + 1,
     at: new Date().toISOString(),
     url,
     ...parseGraphqlRequest(request),
     response: null
-  });
+  };
+  graphqlRequests.push(entry);
+  requestEntries.set(request, entry);
 });
 
 page.on('response', (response) => {
-  if (!response.url().includes('/api/graphql')) return;
+  if (!isGraphqlRequestUrl(response.url())) return;
   const task = (async () => {
-    const parsed = parseGraphqlRequest(response.request());
-    const match = [...graphqlRequests].reverse().find((entry) =>
-      entry.docId === parsed.docId && entry.response == null
-    );
+    const match = requestEntries.get(response.request());
     if (!match) return;
     match.response = await inspectResponse(response);
   })();
@@ -234,6 +284,7 @@ try {
   graphqlRequests.length = 0;
   interestingRequests.length = 0;
   pendingResponses.length = 0;
+  requestEntries.clear();
 
   const beforeScroll = await pageState();
   for (let i = 0; i < 18; i += 1) {
@@ -247,7 +298,14 @@ try {
 
   const paginationRequests = graphqlRequests.filter((entry) => entry.hasAfter);
   const profileThreadRequests = graphqlRequests.filter((entry) =>
-    entry.hasAfter || /Profile.*Threads|Threads.*Profile/i.test(entry.friendlyName || '')
+    entry.hasAfter ||
+    /Profile.*Threads|Threads.*Profile/i.test(entry.friendlyName || '') ||
+    (entry.response?.postCodeCount > 0 && entry.response?.nextCursor)
+  );
+
+  const endpointCounts = Object.fromEntries(
+    [...new Set(graphqlRequests.map((entry) => entry.endpoint))]
+      .map((endpoint) => [endpoint, graphqlRequests.filter((entry) => entry.endpoint === endpoint).length])
   );
 
   const report = {
@@ -263,6 +321,7 @@ try {
     beforeScroll,
     afterScroll,
     totalGraphqlRequests: graphqlRequests.length,
+    endpointCounts,
     paginationRequestCount: paginationRequests.length,
     profileThreadRequestCount: profileThreadRequests.length,
     graphqlRequests,
@@ -273,30 +332,30 @@ try {
 
   await writeFile(reportPath, JSON.stringify(report, null, 2), 'utf8');
 
+  const compact = (entry) => ({
+    index: entry.index,
+    endpoint: entry.endpoint,
+    friendlyName: entry.friendlyName,
+    docId: entry.docId,
+    formKeys: entry.formKeys,
+    pagination: entry.pagination,
+    variables: entry.variables,
+    response: entry.response
+  });
+
   console.log(JSON.stringify({
     username,
     auth: report.auth,
     beforeScroll,
     afterScroll,
     totalGraphqlRequests: report.totalGraphqlRequests,
+    endpointCounts: report.endpointCounts,
     paginationRequestCount: report.paginationRequestCount,
     profileThreadRequestCount: report.profileThreadRequestCount,
     reportFile: `debug/${username}.browser-login-network.json`,
-    paginationRequests: report.paginationRequests.map((entry) => ({
-      index: entry.index,
-      friendlyName: entry.friendlyName,
-      docId: entry.docId,
-      variables: entry.variables,
-      response: entry.response
-    })),
-    profileThreadRequests: report.profileThreadRequests.map((entry) => ({
-      index: entry.index,
-      friendlyName: entry.friendlyName,
-      docId: entry.docId,
-      variables: entry.variables,
-      response: entry.response
-    })),
-    interestingRequests: report.interestingRequests.slice(-40)
+    paginationRequests: report.paginationRequests.map(compact),
+    profileThreadRequests: report.profileThreadRequests.map(compact),
+    graphqlRequests: report.graphqlRequests.map(compact)
   }, null, 2));
 } finally {
   await context.close();
