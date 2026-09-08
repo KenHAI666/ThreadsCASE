@@ -1,4 +1,6 @@
 import { writeFile, mkdir } from 'node:fs/promises';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { normalizeUsername } from './threads-public.js';
 import { parseHydrationData } from './hydration-parser.js';
 
@@ -10,10 +12,14 @@ const OPERATION = 'BarcelonaProfileThreadsTabRefetchableDirectQuery';
 const ROOT_FIELD = 'xdt_api__v1__text_feed__user_id__profile__connection';
 const TARGET_COUNT = 30;
 const PAGE_SIZE = 10;
-const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36';
+// Threads serves an app shell to a browser-like UA here.  The lightweight
+// public profile response (with hydration data and the first-page cursor) is
+// returned when the request identifies this server-side fetcher.
+const UA = 'Mozilla/5.0 (compatible; ThreadsRPGPoC/0.1; +https://runing9to5.com)';
 
 // Persisted query IDs rotate. Try the most relevant recent public captures first.
 const DOC_ID_CANDIDATES = [
+  '28150103917987977',
   '26687434907534883',
   '28437090222560814',
   '33544334045182488'
@@ -22,6 +28,7 @@ const DOC_ID_CANDIDATES = [
 const input = process.argv[2] || '@runing_9to5';
 const username = normalizeUsername(input);
 const profileUrl = `${THREADS_ORIGIN}/@${encodeURIComponent(username)}`;
+const reportPath = resolve(process.argv[3] || fileURLToPath(new URL(`../../debug/${username}.30posts-http.json`, import.meta.url)));
 
 function setCookieLines(headers) {
   if (typeof headers.getSetCookie === 'function') return headers.getSetCookie();
@@ -63,6 +70,8 @@ function extractUserId(text, handle) {
   const source = text.replaceAll('\\"', '"');
   const escaped = handle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   return firstMatch(source, [
+    new RegExp(`"username"\\s*:\\s*"${escaped}"\\s*,\\s*"id"\\s*:\\s*"(\\d+)"`, 'i'),
+    new RegExp(`"username"\\s*:\\s*"${escaped}"[\\s\\S]{0,300}?"id"\\s*:\\s*"(\\d+)"`, 'i'),
     new RegExp(`"username"\\s*:\\s*"${escaped}"[\\s\\S]{0,3500}?"pk"\\s*:\\s*"(\\d+)"`, 'i'),
     new RegExp(`"username"\\s*:\\s*"${escaped}"[\\s\\S]{0,3500}?"id"\\s*:\\s*"(\\d+)"`, 'i'),
     /"user_id"\s*:\s*"(\d+)"/i,
@@ -94,33 +103,43 @@ function collectErrorMessages(value, output = [], depth = 0) {
 
 function findPageInfo(value, depth = 0) {
   if (value == null || depth > 20) return null;
+  const candidates = [];
+  collectPageInfo(value, candidates, depth);
+  return candidates.find((candidate) => candidate.cursor && candidate.hasNextPage === true)
+    || candidates.find((candidate) => candidate.cursor)
+    || candidates.find((candidate) => candidate.hasNextPage === true)
+    || candidates[0]
+    || null;
+}
+
+function collectPageInfo(value, output, depth = 0) {
+  if (value == null || depth > 20) return;
   if (Array.isArray(value)) {
     for (const item of value) {
-      const found = findPageInfo(item, depth + 1);
-      if (found) return found;
+      collectPageInfo(item, output, depth + 1);
     }
-    return null;
+    return;
   }
-  if (typeof value !== 'object') return null;
+  if (typeof value !== 'object') return;
 
   const pageInfo = value.page_info || value.pageInfo;
   if (pageInfo && typeof pageInfo === 'object') {
     const cursor = pageInfo.end_cursor ?? pageInfo.endCursor ?? pageInfo.next_cursor ?? null;
     const hasNextPage = pageInfo.has_next_page ?? pageInfo.hasNextPage ?? null;
     if (cursor != null || hasNextPage != null) {
-      return { cursor, hasNextPage };
+      output.push({ cursor, hasNextPage });
     }
   }
 
   for (const child of Object.values(value)) {
-    const found = findPageInfo(child, depth + 1);
-    if (found) return found;
+    collectPageInfo(child, output, depth + 1);
   }
-  return null;
 }
 
 function normalizeGraphqlPost(post) {
   if (!post || typeof post !== 'object' || !post.code || !post.taken_at) return null;
+  if (post.user?.username?.toLowerCase() !== username) return null;
+  if (post.text_post_app_info?.reply_to_author || post.text_post_app_info?.reply_to_id) return null;
   const info = post.text_post_app_info && typeof post.text_post_app_info === 'object'
     ? post.text_post_app_info
     : {};
@@ -169,48 +188,44 @@ function collectGraphqlPosts(value, output = [], seenObjects = new Set(), depth 
 function relayVariables() {
   return {
     __relay_internal__pv__BarcelonaIsLoggedInrelayprovider: false,
-    __relay_internal__pv__BarcelonaHasPostAuthorNotifControlsrelayprovider: false,
-    __relay_internal__pv__BarcelonaShouldShowFediverseM1Featuresrelayprovider: false,
-    __relay_internal__pv__BarcelonaHasInlineReplyComposerrelayprovider: false,
-    __relay_internal__pv__BarcelonaIsReplyApprovalEnabledrelayprovider: false,
-    __relay_internal__pv__BarcelonaIsReplyApprovalsConsumptionEnabledrelayprovider: false,
+    __relay_internal__pv__BarcelonaHasProfileSelfReplyContextrelayprovider: true,
     __relay_internal__pv__BarcelonaHasDearAlgoConsumptionrelayprovider: true,
+    __relay_internal__pv__BarcelonaHasMetaAiContentAttachmentsrelayprovider: false,
     __relay_internal__pv__BarcelonaHasEventBadgerelayprovider: false,
-    __relay_internal__pv__BarcelonaGenAIRepliesEnabledrelayprovider: false,
+    __relay_internal__pv__BarcelonaGenAIRepliesEnabledrelayprovider: true,
     __relay_internal__pv__BarcelonaIsSearchDiscoveryEnabledrelayprovider: false,
-    __relay_internal__pv__BarcelonaHasPodcastConsumptionrelayprovider: true,
     __relay_internal__pv__BarcelonaHasCommunitiesrelayprovider: true,
-    __relay_internal__pv__BarcelonaHasSelfThreadCountrelayprovider: false,
-    __relay_internal__pv__IsTagIndicatorEnabledrelayprovider: true,
-    __relay_internal__pv__BarcelonaHasDeepDiverelayprovider: false,
     __relay_internal__pv__BarcelonaHasGameScoreSharerelayprovider: true,
+    __relay_internal__pv__BarcelonaMessagesHasLiveChatMessagingrelayprovider: false,
     __relay_internal__pv__BarcelonaHasPublicViewCountCardrelayprovider: true,
-    __relay_internal__pv__BarcelonaHasCommunityEntityCardrelayprovider: false,
-    __relay_internal__pv__BarcelonaHasScorecardCommunityrelayprovider: false,
-    __relay_internal__pv__BarcelonaHasMusicrelayprovider: false,
+    __relay_internal__pv__BarcelonaHasCommunityEmojiUpdateCardrelayprovider: false,
+    __relay_internal__pv__BarcelonaHasCommunityEntityCardrelayprovider: true,
+    __relay_internal__pv__BarcelonaHasScorecardCommunityrelayprovider: true,
+    __relay_internal__pv__BarcelonaHasSportTeamAllegianceCardrelayprovider: true,
+    __relay_internal__pv__BarcelonaHasMusicrelayprovider: true,
     __relay_internal__pv__BarcelonaHasNewspaperLinkStylerelayprovider: false,
-    __relay_internal__pv__BarcelonaHasMessagingrelayprovider: false,
-    __relay_internal__pv__BarcelonaHasGhostPostConsumptionrelayprovider: true,
-    __relay_internal__pv__BarcelonaHasSpoilerStylingInforelayprovider: false,
+    __relay_internal__pv__BarcelonaHasMessagingrelayprovider: true,
+    __relay_internal__pv__BarcelonaHasPodcastV2Consumptionrelayprovider: true,
+    __relay_internal__pv__BarcelonaHasPodcastTranscriptConsumptionrelayprovider: true,
+    __relay_internal__pv__BarcelonaShouldFulfillLightboxQueryrelayprovider: true,
+    __relay_internal__pv__BarcelonaHasViewerRepliedrelayprovider: false,
+    __relay_internal__pv__BarcelonaHasPrivateRepliesDeprecationrelayprovider: false,
     __relay_internal__pv__BarcelonaHasGhostPostEmojiActivationrelayprovider: false,
     __relay_internal__pv__BarcelonaOptionalCookiesEnabledrelayprovider: true,
     __relay_internal__pv__BarcelonaHasDearAlgoWebProductionrelayprovider: false,
-    __relay_internal__pv__BarcelonaQuotedPostUFIEnabledrelayprovider: true,
-    __relay_internal__pv__BarcelonaHasTopicTagsrelayprovider: true,
+    __relay_internal__pv__BarcelonaHasWebFaviconsrelayprovider: true,
     __relay_internal__pv__BarcelonaIsCrawlerrelayprovider: false,
-    __relay_internal__pv__BarcelonaHasDisplayNamesrelayprovider: false,
     __relay_internal__pv__BarcelonaHasCommunityTopContributorsrelayprovider: false,
     __relay_internal__pv__BarcelonaCanSeeSponsoredContentrelayprovider: false,
-    __relay_internal__pv__BarcelonaShouldShowFediverseM075Featuresrelayprovider: false,
-    __relay_internal__pv__BarcelonaImplicitTrendsGKrelayprovider: false,
-    __relay_internal__pv__BarcelonaIsInternalUserrelayprovider: false,
-    __relay_internal__pv__BarcelonaHasProfileSelfReplyContextrelayprovider: false
+    __relay_internal__pv__BarcelonaShouldShowFediverseM075Featuresrelayprovider: true,
+    __relay_internal__pv__BarcelonaIsInternalUserrelayprovider: false
   };
 }
 
 async function createAnonymousSession() {
   const cookies = new Map();
   const response = await fetch(`${THREADS_ORIGIN}/`, {
+    signal: AbortSignal.timeout(20000),
     redirect: 'follow',
     headers: {
       'user-agent': UA,
@@ -230,6 +245,7 @@ async function createAnonymousSession() {
 
 async function fetchProfileHtml(session) {
   const response = await fetch(profileUrl, {
+    signal: AbortSignal.timeout(20000),
     redirect: 'follow',
     headers: {
       'user-agent': UA,
@@ -267,6 +283,7 @@ async function fetchGraphqlPage({ session, userId, cursor, docId }) {
   });
 
   const response = await fetch(GRAPHQL_URL, {
+    signal: AbortSignal.timeout(20000),
     method: 'POST',
     redirect: 'follow',
     headers: {
@@ -314,8 +331,7 @@ async function fetchGraphqlPage({ session, userId, cursor, docId }) {
   };
 }
 
-await mkdir(new URL('../../debug/', import.meta.url), { recursive: true });
-const reportPath = new URL(`../../debug/${username}.30posts-http.json`, import.meta.url);
+await mkdir(dirname(reportPath), { recursive: true });
 
 const session = await createAnonymousSession();
 if (!session.lsd) {

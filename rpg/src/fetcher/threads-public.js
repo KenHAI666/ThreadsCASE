@@ -7,8 +7,8 @@ export function normalizeUsername(input) {
   const raw = String(input).trim();
   const fromUrl = raw.match(/threads\.(?:com|net)\/@([^/?#]+)/i)?.[1];
   const username = (fromUrl || raw).replace(/^@/, '').trim();
-  if (!/^[A-Za-z0-9._]+$/.test(username)) throw new Error('invalid Threads username');
-  return username;
+  if (!/^(?=.{1,30}$)[A-Za-z0-9_][A-Za-z0-9._]*$/.test(username)) throw new Error('請輸入正確的 Threads 帳號');
+  return username.toLowerCase();
 }
 
 function decodeEntities(value = '') {

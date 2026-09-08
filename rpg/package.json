@@ -7,6 +7,8 @@
     "fetch": "node src/fetcher/cli.js",
     "fetch:30": "node src/fetcher/fetch30-browser.js",
     "fetch:30-http": "node src/fetcher/fetch30-http.js",
+    "analyze:30": "node src/scoring/analyze30.js",
+    "web": "node server.js",
     "fetch:debug": "node src/fetcher/debug.js",
     "fetch:pagination": "node src/fetcher/pagination-debug.js",
     "fetch:querymeta": "node src/fetcher/querymeta-debug.js",
