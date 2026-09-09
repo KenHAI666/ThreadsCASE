@@ -17,3 +17,5 @@ services:
         value: "2"
       - key: RPG_RATE_LIMIT_PER_MIN
         value: "10"
+      - key: RPG_PUBLIC_ANALYZE_ENABLED
+        value: "false"
