@@ -1,4 +1,6 @@
 import { mkdir, writeFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { normalizeUsername } from './threads-public.js';
 import { parseHydrationData } from './hydration-parser.js';
 
@@ -321,8 +323,9 @@ async function fetchPage({ session, userId, cursor, docId }) {
   };
 }
 
-await mkdir(new URL('../../debug/', import.meta.url), { recursive: true });
-const reportPath = new URL(`../../debug/${username}.30posts-http.json`, import.meta.url);
+const defaultReportPath = fileURLToPath(new URL(`../../debug/${username}.30posts-http.json`, import.meta.url));
+const reportPath = resolve(process.argv[3] || defaultReportPath);
+await mkdir(dirname(reportPath), { recursive: true });
 
 async function writeFailureReport(report) {
   await writeFile(reportPath, JSON.stringify(report, null, 2), 'utf8');
