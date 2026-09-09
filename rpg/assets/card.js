@@ -12,7 +12,10 @@ export async function drawCard(canvas, data) {
   const key = professions[data.profession?.key] ? data.profession.key : 'villager';
   const p = professions[key];
   const art = new Image();
-  art.src = `/assets/${key}.png`;
+  // Resolve the artwork beside this module so the same renderer works on
+  // Render (`/assets/card.js`) and the GitHub Pages customer portal
+  // (`/rpg/assets/card.js`).
+  art.src = new URL(`${key}.png`, import.meta.url).href;
   await art.decode();
   await document.fonts.ready;
   canvas.width = 1080; canvas.height = 1350;

@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>脆文雷達｜貓咪小卡</title>
+  <style>
+    :root{--ink:#171717;--navy:#14213d;--blue:#0a6ee8;--blue-soft:#eaf3ff;--line:#e2e5e9;--muted:#666b73;--bg:#f5f4ef;--card:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC",sans-serif;color:var(--ink);background:var(--bg);line-height:1.65;-webkit-font-smoothing:antialiased}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg)}.shell{width:min(920px,calc(100% - 28px));margin:28px auto 50px}.top{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:16px}.top a{color:var(--navy);font-weight:850;text-decoration:none}.top span{color:var(--muted);font-size:13px}.panel{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:24px;box-shadow:0 12px 35px rgba(20,33,61,.05)}h1,h2,h3,p{margin:0}h1{font-size:clamp(28px,6vw,48px);line-height:1.05;letter-spacing:-.055em}.eyebrow{margin-bottom:10px;color:var(--blue-dark,#0757b8);font-size:12px;font-weight:850;letter-spacing:.12em}.lead{margin-top:13px;color:var(--muted);font-size:15px;line-height:1.75;max-width:700px}.notice{margin-top:18px;padding:13px 15px;border:1px solid #cce2fd;border-radius:11px;background:var(--blue-soft);color:#17558f;font-size:13px}.error{margin-top:18px;padding:13px 15px;border-radius:11px;background:#fff0f0;color:#aa2525;font-size:13px}.hidden{display:none!important}.summary{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:22px}.stat{padding:14px;border:1px solid var(--line);border-radius:13px;background:#fff}.stat span{display:block;color:var(--muted);font-size:12px}.stat strong{display:block;margin-top:3px;font-size:21px}.result{display:grid;grid-template-columns:minmax(0,540px) minmax(230px,1fr);gap:22px;align-items:start;margin-top:22px}.card-wrap{padding:15px;border:1px solid var(--line);border-radius:16px;background:#fbfaf6}.card-wrap canvas{display:block;width:100%;height:auto;border-radius:8px;background:#f8f2e7}.side{display:grid;gap:14px}.side h2{font-size:21px}.side p{color:var(--muted);font-size:13px}.dimensions{display:grid;gap:9px;margin-top:14px}.dimension{display:grid;grid-template-columns:50px minmax(0,1fr) 38px;gap:8px;align-items:center;font-size:13px}.bar{height:8px;background:#e8edf5;border-radius:99px;overflow:hidden}.bar span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#0a6ee8,#d89a43)}.score{text-align:right;font-weight:800}.actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:16px}.actions button,.actions a{display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:10px;padding:10px 13px;background:#fff;color:var(--ink);font:inherit;font-weight:750;text-decoration:none;cursor:pointer}.actions .primary{background:var(--blue);border-color:var(--blue);color:#fff}.actions button:hover,.actions a:hover{border-color:var(--blue);color:var(--blue-dark)}.actions .primary:hover{background:#0757b8;color:#fff}.footnote{margin-top:14px;color:var(--muted);font-size:12px;line-height:1.6}.loading{text-align:center;padding:50px 20px;color:var(--muted)}
+    @media(max-width:720px){.shell{width:min(100% - 18px,540px);margin:12px auto 30px}.top{align-items:flex-start}.top span{font-size:11px;text-align:right}.panel{padding:17px}.summary{grid-template-columns:repeat(2,1fr);gap:8px}.result{grid-template-columns:1fr;gap:14px}.card-wrap{padding:9px}.side{padding:4px 2px 0}.actions button,.actions a{flex:1 1 140px}.lead{font-size:14px}}
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <div class="top"><a href="dashboard.html">← 回到脆文雷達</a><span>自己的文案分析 · 貓咪小卡</span></div>
+    <section class="panel">
+      <div class="eyebrow">THREADS RADAR · CAT CARD</div>
+      <h1>把你的脆文雷達，變成一張貓咪小卡。</h1>
+      <p class="lead">小卡只讀取目前 Chrome 已保存的「我的帳號」文案。戰鬥力、五維能力與職業全部由同一份雷達資料計算，卡面只負責呈現結果。</p>
+      <div id="status" class="notice">正在讀取目前 Chrome 的脆文雷達資料…</div>
+      <div id="error" class="error hidden"></div>
+      <div id="result" class="hidden">
+        <div id="summary" class="summary"></div>
+        <div class="result">
+          <div class="card-wrap"><canvas id="card" width="1080" height="1350" aria-label="貓咪小卡預覽"></canvas></div>
+          <aside class="side">
+            <div><h2 id="profession">尚未分析</h2><p id="description">—</p></div>
+            <div><h3>五維能力</h3><div id="dimensions" class="dimensions"></div></div>
+            <div class="actions"><button id="download" class="primary" type="button">下載小卡 PNG</button><button id="share" type="button">分享結果</button><a href="dashboard.html?page=analysis">查看完整分析</a></div>
+            <p class="footnote">圖片會在你的裝置本機產生。分享按鈕會優先使用手機系統分享；若瀏覽器不支援，會複製結果說明。</p>
+          </aside>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script type="module">
+    import { drawCard, professions } from './rpg/assets/card.js';
+    import { analyzeCatPosts } from './rpg/assets/cat-card-analyzer.js';
+
+    const EXTENSION_IDS = ['alkieogigpplbmifheoldfeejnmpkbmn', 'aaaihgbgeagjlblhfmacjokjemeidgnf'].filter(Boolean);
+    const $ = (id) => document.getElementById(id);
+    const postScope = (post) => ['my_account', 'own'].includes(post.content_scope) ? 'my_account' : post.content_scope || 'other';
+
+    function bridge(type, payload = {}) {
+      return new Promise((resolve, reject) => {
+        if (!globalThis.chrome?.runtime?.sendMessage) { reject(new Error('找不到脆文雷達擴充功能。請先安裝擴充功能，再從脆文雷達主控台開啟。')); return; }
+        let index = 0;
+        const attempt = () => {
+          if (index >= EXTENSION_IDS.length) { reject(new Error('無法連接脆文雷達。請確認擴充功能已啟用並重新載入。')); return; }
+          chrome.runtime.sendMessage(EXTENSION_IDS[index++], { type, ...payload }, (response) => {
+            if (chrome.runtime.lastError || !response) { attempt(); return; }
+            if (!response.ok) { reject(new Error(response.error || '主控台操作失敗')); return; }
+            resolve(response.data);
+          });
+        };
+        attempt();
+      });
+    }
+
+    const clamp = (value, min = 0, max = 100) => Math.max(min, Math.min(max, Number(value) || 0));
+    function number(value, digits = 0) { return Number(value || 0).toLocaleString('zh-TW', { maximumFractionDigits: digits }); }
+    function showError(message) { $('error').textContent = message; $('error').classList.remove('hidden'); $('status').classList.add('hidden'); }
+    function setStatus(message) { $('status').textContent = message; $('status').classList.remove('hidden'); }
+    function renderSummary(analysis) {
+      const values = [['分析樣本', `${number(analysis.source.sampleCount)} 篇`], ['戰鬥力', number(analysis.battlePower, 2)], ['活躍天數', `${number(analysis.sample.activeDays)} 天`], ['總互動', number(analysis.sample.totalInteractions)]];
+      $('summary').replaceChildren(...values.map(([label, value]) => { const item = document.createElement('div'); item.className = 'stat'; item.innerHTML = `<span>${label}</span><strong>${value}</strong>`; return item; }));
+      const meta = professions[analysis.profession.key] || professions.villager;
+      $('profession').textContent = `${analysis.profession.label} · ${meta.subtitle}`;
+      $('description').textContent = meta.intro;
+      $('dimensions').replaceChildren(...analysis.dimensions.map((row) => { const item = document.createElement('div'); item.className = 'dimension'; item.innerHTML = `<span>${row.label}</span><span class="bar"><span style="width:${clamp(row.score)}%"></span></span><strong class="score">${number(row.score)}</strong>`; return item; }));
+    }
+
+    let current = null;
+    async function render() {
+      try {
+        const snapshot = await bridge('BRIDGE_SNAPSHOT');
+        const ownPosts = (snapshot.posts || []).filter((post) => postScope(post) === 'my_account');
+        if (!ownPosts.length) { setStatus('尚未找到自己的文案。請先回到主控台，在「我的帳號」抓取文案，再回來產生小卡。'); return; }
+        current = analyzeCatPosts(ownPosts, { requestedCount: 100, fetchSuccess: true });
+        renderSummary(current);
+        await drawCard($('card'), current);
+        $('result').classList.remove('hidden');
+        if (current.source.sampleCount < 10) setStatus(`目前只有 ${current.source.sampleCount} 篇有效文案，先顯示村民卡；抓到 10 篇以上會開始判定職業。`);
+        else if (current.source.sampleCount < 100) setStatus(`已用 ${current.source.sampleCount} 篇自己的文案產生小卡。建議補抓到 100 篇，雷達結果會更穩定。`);
+        else setStatus('已用目前保存的 100 篇自己的文案產生小卡。');
+      } catch (error) { showError(error.message || '無法讀取脆文雷達資料'); }
+    }
+
+    $('download').addEventListener('click', () => {
+      if (!current) return;
+      $('card').toBlob((blob) => { if (!blob) return; const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `threads-radar-cat-card-${current.username}.png`; link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 1000); }, 'image/png');
+    });
+    $('share').addEventListener('click', async () => {
+      if (!current) return;
+      const text = `我在脆文雷達測出：${current.profession.label}｜戰鬥力 ${number(current.battlePower, 2)}。你是哪一種貓咪冒險者？`;
+      try {
+        if (navigator.share) {
+          const blob = await new Promise((resolve) => $('card').toBlob(resolve, 'image/png'));
+          const file = blob ? new File([blob], `threads-radar-cat-card-${current.username}.png`, { type: 'image/png' }) : null;
+          if (file && navigator.canShare?.({ files: [file] })) await navigator.share({ files: [file], title: '脆文雷達貓咪小卡', text });
+          else await navigator.share({ title: '脆文雷達貓咪小卡', text, url: location.href });
+        } else {
+          await navigator.clipboard.writeText(`${text}\n${location.href}`);
+          setStatus('結果已複製，可以貼到 Threads 或訊息中。');
+        }
+      } catch (error) { if (error?.name !== 'AbortError') setStatus('分享未完成，仍可先下載小卡 PNG。'); }
+    });
+    render();
+  </script>
+</body>
+</html>
