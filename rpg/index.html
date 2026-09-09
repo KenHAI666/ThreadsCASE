@@ -178,7 +178,7 @@
             <button id="downloadButton" type="button">下載小卡 PNG</button>
             <button id="shareButton" class="secondary" type="button">分享結果</button>
           </div>
-          <p class="footnote">分享按鈕會優先使用裝置的原生分享；不支援時會複製結果網址。小卡會在你的瀏覽器裡產生，不上傳貼文內容。</p>
+          <p class="footnote">下載會把完整 PNG 存到手機的下載項目；分享結果會開啟 Threads 發文入口，並帶入你的職業、戰鬥力與結果網址。</p>
         </section>
       </div>
     </section>
@@ -305,32 +305,43 @@
     }
 
     document.querySelector('#downloadButton').addEventListener('click', async () => {
-      const blob = await canvasBlob();
-      if (!blob) return;
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = `threads-adventurer-${current.username}.png`;
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+      if (!current) return;
+      const button = document.querySelector('#downloadButton');
+      button.disabled = true;
+      try {
+        const blob = await canvasBlob();
+        if (!blob) throw new Error('小卡產生失敗');
+        const objectUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = objectUrl;
+        link.download = `threads-adventurer-${current.username}.png`;
+        link.rel = 'noopener';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 1500);
+        setStatus('已開始下載完整小卡 PNG。', 'success');
+      } catch (error) {
+        setStatus(error.message || '小卡下載失敗，請再試一次。', 'error');
+      } finally {
+        button.disabled = false;
+      }
     });
 
     document.querySelector('#shareButton').addEventListener('click', async () => {
       if (!current) return;
       const shareUrl = window.location.href;
-      const blob = await canvasBlob();
+      const profession = current.profession?.label || '村民';
+      const shareText = `我在 Threads 貓咪冒險者測出：${profession}｜戰鬥力 ${number(current.battlePower, 2)}。你是哪一種貓咪冒險者？`;
+      const intent = new URL('https://www.threads.com/intent/post');
+      intent.searchParams.set('text', shareText);
+      intent.searchParams.set('url', shareUrl);
       try {
-        if (navigator.share) {
-          const file = blob && typeof File !== 'undefined' ? new File([blob], `threads-adventurer-${current.username}.png`, { type: 'image/png' }) : null;
-          const data = { title: `@${current.username} 的 Threads 貓咪職業卡`, text: `我是${current.profession?.label}，戰鬥力 ${number(current.battlePower, 2)}。`, url: shareUrl };
-          if (file && (!navigator.canShare || navigator.canShare({ files: [file] }))) data.files = [file];
-          await navigator.share(data);
-          setStatus('已交給裝置分享。', 'success');
-          return;
-        }
-        await navigator.clipboard.writeText(shareUrl);
-        setStatus('裝置不支援原生分享，結果網址已複製。', 'success');
+        setStatus('正在開啟 Threads 發文入口…');
+        const opened = window.open(intent.href, '_blank', 'noopener,noreferrer');
+        if (!opened) window.location.assign(intent.href);
       } catch (error) {
-        if (error?.name !== 'AbortError') setStatus('分享未完成，但小卡仍可下載。', 'error');
+        setStatus('無法開啟 Threads，請先下載小卡或複製結果網址。', 'error');
       }
     });
 
