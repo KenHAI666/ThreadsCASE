@@ -31,6 +31,9 @@
       min-height: 100vh;
     }
     .page { width: min(1100px, calc(100% - 32px)); margin: 0 auto; padding: 38px 0 70px; }
+    .topline { display: flex; justify-content: space-between; align-items: center; gap: 14px; margin-bottom: 16px; color: var(--ink-soft); font-size: .82rem; }
+    .topline a { color: var(--ink); font-weight: 850; text-decoration: none; }
+    .topline a:hover { color: var(--orange); }
     .frame { border: 2px solid var(--line); box-shadow: 8px 8px 0 var(--line); background: rgba(255,253,248,.76); }
     .hero { padding: clamp(25px, 5vw, 55px); display: grid; gap: 23px; }
     .eyebrow { letter-spacing: .13em; font-size: .78rem; font-weight: 800; color: var(--orange); }
@@ -98,6 +101,11 @@
     .fixed-intro p { margin-top: 2%; font-size: clamp(.72rem, 2vw, .9rem); line-height: 1.3; }
     .fixed-intro small { display: block; color: var(--ink-soft); font-size: clamp(.6rem, 1.7vw, .72rem); margin-top: 1.5%; }
     .card-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 19px; }
+    .radar-entry { display: flex; justify-content: space-between; align-items: center; gap: 18px; margin-top: 18px; padding: 17px 18px; border: 2px solid var(--line); border-radius: 14px; background: var(--ink); color: var(--white); }
+    .radar-entry strong { display: block; font-size: 1rem; }
+    .radar-entry span { display: block; margin-top: 3px; color: #d9e0ea; font-size: .8rem; line-height: 1.45; }
+    .radar-entry a { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; border: 2px solid var(--gold); border-radius: 11px; padding: 11px 14px; background: var(--gold); color: var(--ink); font-weight: 900; text-decoration: none; white-space: nowrap; }
+    .radar-entry a:hover { background: #edb861; }
     .footnote { color: var(--ink-soft); font-size: .78rem; line-height: 1.6; margin-top: 18px; }
     .hidden { display: none !important; }
     @media (max-width: 780px) {
@@ -119,6 +127,8 @@
       .fixed-intro p { margin-top: 8px; line-height: 1.45; }
       .fixed-intro small { margin-top: 8px; }
       .card-actions button { flex: 1 1 140px; }
+      .radar-entry { align-items: stretch; flex-direction: column; }
+      .radar-entry a { width: 100%; }
       .power { text-align: left; }
       .power strong { font-size: 2.7rem; }
     }
@@ -126,10 +136,11 @@
 </head>
 <body>
   <main class="page">
+    <div class="topline"><a href="https://radar.runing9to5.com/">脆文雷達</a><span>公開帳號小卡體驗</span></div>
     <section class="frame hero">
       <div class="eyebrow">THREADS ADVENTURER · PUBLIC PROFILE CHECK</div>
       <h1>輸入帳號，領一張你的貓咪職業卡。</h1>
-      <p class="hero-copy">只讀公開 Threads 頁面最近 30 篇貼文，計算互動、討論、頻率、穩定與爆擊五個能力值，再把結果做成可以帶走的小卡。</p>
+      <p class="hero-copy">只讀公開 Threads 頁面最近 30 篇貼文，計算互動、討論、頻率、穩定與爆擊五個能力值，再把結果做成可以帶走的小卡。想進一步掌握自己的寫法，再把這張卡帶進脆文雷達。</p>
       <form class="search" id="searchForm">
         <input id="usernameInput" name="username" autocomplete="off" placeholder="輸入 @username，例如 @runing_9to5" aria-label="Threads username" required>
         <button id="analyzeButton" type="submit">開始冒險</button>
@@ -189,6 +200,10 @@
           <div class="card-actions">
             <button id="downloadButton" type="button">下載小卡 PNG</button>
             <button id="shareButton" class="secondary" type="button">分享結果</button>
+          </div>
+          <div class="radar-entry">
+            <div><strong>小卡是入口，文案分析才是下一步。</strong><span>用脆文雷達抓取自己的 100 篇文案，找出你的寫作習慣與高互動寫法。</span></div>
+            <a id="radarCta" href="https://radar.runing9to5.com/?from=cat-card#guide">進入脆文雷達 →</a>
           </div>
           <p class="footnote">下載會把完整 PNG 存到手機的下載項目；分享結果會開啟 Threads 發文入口，並帶入你的職業、戰鬥力與結果網址。</p>
         </section>
@@ -286,6 +301,11 @@
       renderDimensions(analysis.dimensions || []);
       renderTrend(analysis.posts || []);
       renderCard(analysis);
+      const radarUrl = new URL('https://radar.runing9to5.com/');
+      radarUrl.searchParams.set('from', 'cat-card');
+      radarUrl.searchParams.set('username', analysis.username);
+      radarUrl.hash = 'guide';
+      document.querySelector('#radarCta').href = radarUrl.href;
       result.classList.remove('hidden');
     }
 
