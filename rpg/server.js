@@ -62,15 +62,17 @@ async function compute(username) {
   const analysisPath = join(taskDir, 'analysis.json');
   try {
 
-  await runScript('src/fetcher/fetch30-http.js', [`@${username}`, fetchPath], { allowExitCodes: [2] });
+  await runScript('src/fetcher/fetch30-http-v2.js', [`@${username}`, fetchPath], { allowExitCodes: [2] });
   const fetched = await readReport(fetchPath).catch(() => null);
-  if (!fetched || !fetched.posts?.length) {
+  if (!fetched || !fetched.posts?.length || fetched.complete === false) {
     const error = new Error('Threads 公開頁面目前無法取得足夠資料');
     error.code = 'FETCH_INCOMPLETE';
     error.details = {
       stage: fetched?.stage || null,
       profileStatus: fetched?.profileStatus || null,
-      returnedCount: fetched?.returnedCount || 0
+      returnedCount: fetched?.returnedCount || 0,
+      initialCount: fetched?.initialCount || 0,
+      attempts: fetched?.attempts || []
     };
     throw error;
   }
@@ -83,6 +85,10 @@ async function compute(username) {
     fetched: {
       fetchedAt: fetched.fetchedAt,
       returnedCount: fetched.returnedCount,
+      complete: fetched.complete,
+      success: fetched.success,
+      initialCount: fetched.initialCount,
+      collectedCount: fetched.collectedCount,
       transport: fetched.transport,
       browserUsed: fetched.browserUsed,
       loginUsed: fetched.loginUsed

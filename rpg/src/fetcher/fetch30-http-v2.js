@@ -354,9 +354,16 @@ const posts = [...byCode.values()]
   .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
   .slice(0, TARGET);
 
+// A complete result either reaches the requested sample size or proves that
+// Threads has no next page. If a cursor is still live after an empty/failed
+// page, keep the partial sample marked incomplete so the API cannot present it
+// as a finished analysis.
+const complete = posts.length >= TARGET || hasNextPage === false || !cursor;
+
 const report = {
   username,
   success: posts.length >= TARGET,
+  complete,
   browserUsed: false,
   loginUsed: false,
   initialCount: bootstrap.posts.length,
