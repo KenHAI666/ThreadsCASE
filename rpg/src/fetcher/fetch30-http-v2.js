@@ -177,8 +177,20 @@ function collectErrors(value, out = [], depth = 0) {
   return [...new Set(out)];
 }
 
+function parseBootstrap(response, html, bootstrapFallback = false) {
+  const hydration = parseHydrationData(html, username);
+  return {
+    response,
+    html,
+    posts: hydration.posts || [],
+    userId: extractUserId(html),
+    cursor: extractCursor(html),
+    bootstrapFallback
+  };
+}
+
 async function bootstrapPublicProfile() {
-  const response = await fetch(profileUrl, {
+  const directResponse = await fetch(profileUrl, {
     redirect: 'follow',
     headers: {
       'user-agent': PROFILE_UA,
@@ -186,15 +198,43 @@ async function bootstrapPublicProfile() {
       'accept-language': 'zh-TW,zh;q=0.9,en;q=0.7'
     }
   });
-  const html = await response.text();
-  const hydration = parseHydrationData(html, username);
-  return {
-    response,
-    html,
-    posts: hydration.posts || [],
-    userId: extractUserId(html),
-    cursor: extractCursor(html)
-  };
+  const directHtml = await directResponse.text();
+  const direct = parseBootstrap(directResponse, directHtml);
+  if (direct.response.ok && direct.posts.length > 0 && direct.userId && direct.cursor) return direct;
+
+  // Some Render egress IPs receive an app shell until an anonymous home
+  // session is established first. Retry the profile with the cookies minted
+  // by `/`, matching the browser-like bootstrap used by Threads itself.
+  const cookies = new Map();
+  mergeCookies(cookies, directResponse.headers);
+  const homeResponse = await fetch(`${ORIGIN}/`, {
+    redirect: 'follow',
+    headers: {
+      'user-agent': BROWSER_UA,
+      accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'accept-language': 'zh-TW,zh;q=0.9,en;q=0.7',
+      'x-ig-app-id': APP_ID,
+      cookie: cookieHeader(cookies)
+    }
+  });
+  const homeHtml = await homeResponse.text();
+  mergeCookies(cookies, homeResponse.headers);
+  const retryResponse = await fetch(profileUrl, {
+    redirect: 'follow',
+    headers: {
+      'user-agent': PROFILE_UA,
+      accept: 'text/html,application/xhtml+xml',
+      'accept-language': 'zh-TW,zh;q=0.9,en;q=0.7',
+      'x-ig-app-id': APP_ID,
+      cookie: cookieHeader(cookies)
+    }
+  });
+  const retryHtml = await retryResponse.text();
+  const retry = parseBootstrap(retryResponse, retryHtml, true);
+  // Keep the fallback response as the authoritative bootstrap, but retain
+  // the home HTML in memory so the session builder can recover an LSD token.
+  if (!extractLsd(retryHtml)) retry.html = `${retryHtml}\n${homeHtml}`;
+  return retry;
 }
 
 async function buildAnonymousSession(profileBootstrap) {
