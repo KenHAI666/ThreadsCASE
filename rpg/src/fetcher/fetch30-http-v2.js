@@ -324,9 +324,15 @@ async function fetchPage({ session, userId, cursor, docId }) {
 await mkdir(new URL('../../debug/', import.meta.url), { recursive: true });
 const reportPath = new URL(`../../debug/${username}.30posts-http.json`, import.meta.url);
 
+async function writeFailureReport(report) {
+  await writeFile(reportPath, JSON.stringify(report, null, 2), 'utf8');
+  console.log(JSON.stringify(report, null, 2));
+  process.exit(2);
+}
+
 const bootstrap = await bootstrapPublicProfile();
 if (!bootstrap.response.ok || !bootstrap.userId || !bootstrap.cursor || bootstrap.posts.length === 0) {
-  console.log(JSON.stringify({
+  await writeFailureReport({
     username,
     success: false,
     stage: 'profile_bootstrap',
@@ -334,22 +340,21 @@ if (!bootstrap.response.ok || !bootstrap.userId || !bootstrap.cursor || bootstra
     initialCount: bootstrap.posts.length,
     userIdFound: Boolean(bootstrap.userId),
     cursorFound: Boolean(bootstrap.cursor),
-    htmlBytes: Buffer.byteLength(bootstrap.html, 'utf8')
-  }, null, 2));
-  process.exit(2);
+    htmlBytes: Buffer.byteLength(bootstrap.html, 'utf8'),
+    bootstrapFallback: bootstrap.bootstrapFallback === true
+  });
 }
 
 const session = await buildAnonymousSession(bootstrap);
 if (!session.lsd) {
-  console.log(JSON.stringify({
+  await writeFailureReport({
     username,
     success: false,
     stage: 'anonymous_session',
     initialCount: bootstrap.posts.length,
     cursorFound: true,
     reason: 'lsd_not_found'
-  }, null, 2));
-  process.exit(2);
+  });
 }
 
 const byCode = new Map(bootstrap.posts.filter((p) => p?.code).map((p) => [p.code, p]));

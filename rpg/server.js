@@ -32,6 +32,27 @@ function sendJson(response, status, value) {
   response.end(body);
 }
 
+function safeFetchDiagnostics(details) {
+  if (!details || typeof details !== 'object') return undefined;
+  return {
+    stage: details.stage || null,
+    profileStatus: details.profileStatus ?? null,
+    initialCount: details.initialCount ?? null,
+    returnedCount: details.returnedCount ?? null,
+    attempts: Array.isArray(details.attempts)
+      ? details.attempts.map((attempt) => ({
+        page: attempt.page ?? null,
+        docId: attempt.docId ?? null,
+        status: attempt.status ?? null,
+        postCount: attempt.postCount ?? null,
+        nextCursorFound: attempt.nextCursorFound ?? null,
+        hasNextPage: attempt.hasNextPage ?? null,
+        errors: Array.isArray(attempt.errors) ? attempt.errors.slice(0, 3) : []
+      }))
+      : []
+  };
+}
+
 async function readReport(path) {
   return JSON.parse(await readFile(path, 'utf8'));
 }
@@ -258,7 +279,8 @@ const server = http.createServer(async (request, response) => {
         ok: false,
         username,
         error: error.code || 'analysis_failed',
-        message: error.code === 'BUSY' ? error.message : '目前無法讀取這個帳號的公開貼文。請確認帳號為公開，或稍後再試。'
+        message: error.code === 'BUSY' ? error.message : '目前無法讀取這個帳號的公開貼文。請確認帳號為公開，或稍後再試。',
+        diagnostics: safeFetchDiagnostics(error.details)
       });
     }
     return;
