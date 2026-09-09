@@ -79,7 +79,7 @@
     .share-card:before { content: ''; position: absolute; inset: 8px; border: 1px solid rgba(38,59,88,.4); pointer-events: none; z-index: 4; }
     .fixed-art { position: relative; min-height: 0; overflow: hidden; background: #e8dfd0; border-bottom: 2px solid var(--line); }
     .fixed-art:after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 70%, rgba(27,42,64,.18)); pointer-events: none; }
-    .fixed-art img { display: block; width: 100%; height: 100%; object-fit: cover; mix-blend-mode: multiply; }
+    .fixed-art img { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: cover; mix-blend-mode: multiply; }
     .fixed-level, .fixed-handle { position: absolute; z-index: 2; color: #fffbee; text-shadow: 0 2px 0 rgba(27,42,64,.8), 0 0 7px rgba(27,42,64,.45); font-weight: 900; }
     .fixed-level { left: 7%; top: 8%; font-size: clamp(1.1rem, 3.5vw, 1.8rem); line-height: 1.1; }
     .fixed-level strong { display: block; font-size: 1.25em; margin-top: 4px; }
@@ -106,7 +106,19 @@
       .content-grid { grid-template-columns: 1fr; padding: 0 18px 20px; }
       .result-head { padding: 22px 18px 0; }
       .card-panel { padding: 0 18px 22px; }
-      .share-card { max-width: 500px; box-shadow: 5px 5px 0 var(--line); }
+      .share-card { max-width: 500px; aspect-ratio: auto; display: block; overflow: visible; box-shadow: 5px 5px 0 var(--line); }
+      .fixed-art { aspect-ratio: 904 / 650; height: auto; }
+      .fixed-data { padding: 18px 8% 16px; }
+      .fixed-power { margin-top: 8px; }
+      .fixed-power strong { font-size: clamp(2rem, 11vw, 3.2rem); }
+      .card-stats { margin-top: 14px; }
+      .card-stat { padding-top: 6px; }
+      .card-stat small { font-size: .68rem; }
+      .card-stat strong { font-size: 1rem; }
+      .fixed-intro { padding: 16px 8% 18px; }
+      .fixed-intro p { margin-top: 8px; line-height: 1.45; }
+      .fixed-intro small { margin-top: 8px; }
+      .card-actions button { flex: 1 1 140px; }
       .power { text-align: left; }
       .power strong { font-size: 2.7rem; }
     }
@@ -338,6 +350,12 @@
       intent.searchParams.set('url', shareUrl);
       try {
         setStatus('正在開啟 Threads 發文入口…');
+        const isMobile = window.matchMedia?.('(max-width: 780px)').matches
+          || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+        if (isMobile) {
+          window.location.assign(intent.href);
+          return;
+        }
         const opened = window.open(intent.href, '_blank', 'noopener,noreferrer');
         if (!opened) window.location.assign(intent.href);
       } catch (error) {
