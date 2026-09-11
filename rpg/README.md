@@ -1,45 +1,44 @@
-# Threads RPG PoC
+# Threads RPG 小卡服務
 
-這個目錄用來開發「Threads 冒險者」公開網頁工具。
+這個目錄提供貓咪小卡的展示、下載與分享頁面。Threads 會阻擋雲端爬蟲，因此正式產品不再讓 Render 直接輸入帳號抓取；自己的文案由 Chrome 擴充功能在使用者瀏覽器內讀取。
 
 ## 網頁 MVP
 
-目前已接上可直接操作的網頁：
+Render 目前提供可直接操作的示範頁：
 
 ```bash
-cd /Users/ken/ThreadsCASE/rpg
+cd rpg
 npm run web
 ```
 
-瀏覽器開啟 `http://127.0.0.1:8787/`，輸入 `@username` 後，網頁會呼叫 `/api/analyze`，讀取公開 Threads 頁面最近 30 篇貼文，顯示五維能力、職業、戰鬥力與互動走勢，並在瀏覽器本機產生可下載／分享的 1080×1350 PNG 小卡。
+瀏覽器開啟 `http://127.0.0.1:8787/` 可查看示範資料、貓咪職業卡、下載與分享介面。要產生自己的卡，請前往脆文雷達前台，讓擴充功能讀取 Chrome 本機文案；Render 的 `/api/analyze` 目前刻意停用，避免再次觸發雲端 IP 封鎖。
 
-`server.js` 是可部署的 Node HTTP API：`PORT` 與 `HOST` 可由環境變數指定，結果會以帳號快取 6 小時。前端是 `index.html`，目前使用 `assets/bard-cat.png` 作為吟遊詩人示範素材；其他職業先以職業圖示呈現，之後可直接替換成各職業素材。
+`server.js` 是可部署的 Node HTTP 服務：`PORT` 與 `HOST` 可由環境變數指定，`/api/health` 提供健康檢查。前端是 `index.html`，使用六種貓咪職業素材呈現示範卡；後續 Render 可承接圖片產生、分享檔案或會員服務，不直接代抓 Threads。
 
 ## 免費上線方式
 
 專案根目錄的 `render.yaml` 已準備好 Render Free 設定。建立 Render Web Service 時連接這個 GitHub repository，選擇 Blueprint 部署即可。服務會使用 `rpg/` 作為 root directory，啟動 `npm run web`，並由 Render 注入 `PORT`。
 
-上線前的保護已包含：同一帳號快取、同時最多 2 個抓取任務、單一來源每分鐘最多 10 次分析請求。這些限制是小遊戲公開測試用的保護，之後做脆文雷達時要改成正式的工作佇列與持久化儲存。
+目前服務保留同時工作數與速率限制設定，作為未來圖片／會員服務的基礎；公開 Threads 抓取開關 `RPG_PUBLIC_ANALYZE_ENABLED` 預設為 `false`。
 
 ## 產品流程
 
-1. 使用者輸入公開 Threads 帳號（例如 `@runing_9to5`）
-2. 後端讀取該帳號的公開頁面
-3. 正規化最近 30 篇有效貼文資料
-4. 計算五維能力與專業指標
-5. 判定 RPG 職業、LV、戰鬥力
-6. 顯示分析結果
-7. 產生 K叔貓角色分享卡（1080×1350 PNG）
+1. 使用者在 Chrome 登入 Threads
+2. 脆文雷達擴充功能抓取自己的文案並保存於 Chrome 本機
+3. 前台從擴充功能 bridge 讀取本機資料
+4. 計算五維能力、RPG 職業、LV 與戰鬥力
+5. 產生 K叔貓角色分享卡（1080×1350 PNG）
+6. 使用者下載小卡或分享至 Threads
 
 ## V0 驗收標準
 
-第一階段只驗證資料取得，不先做完整 UI：
+第一階段改驗證擴充功能到小卡的資料流：
 
-- 輸入 `@runing_9to5`
-- 取得公開 profile 基本資料
-- 取得最近貼文的 timestamp / likes / replies / reposts（能取得多少先如實回傳）
-- 將資料輸出為標準 JSON
-- 明確標示抓取成功、資料不足或被 Threads 阻擋
+- 在 Chrome 取得自己的 Threads 文案
+- 由本機分析器輸出標準 JSON
+- 前台能讀取本機資料並顯示貓咪小卡
+- 下載與分享不把原文送到 Render
+- Render 健康檢查正常，公開抓取端點保持停用
 
 ## V1 分析維度
 
@@ -62,9 +61,9 @@ npm run web
 
 ## 技術原則
 
-- 不要求使用者登入 Threads
-- 不依賴 Chrome Extension
-- 只處理公開頁面與公開可見資料
+- 由 Chrome 擴充功能讀取使用者自己的 Threads 頁面
+- 不把 Threads Cookie 或原文送到 Render
+- Render 不直接抓取 Threads 公開帳號
 - 抓取器與評分引擎分離，避免 Threads 頁面改版影響整個產品
 - 先嘗試輕量 HTTP/HTML/hydration 解析；必要時才使用 headless browser
 - 同帳號結果應做 cache，避免重複抓取

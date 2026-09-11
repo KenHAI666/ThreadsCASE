@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Threads 貓咪冒險者｜公開帳號職業卡</title>
-  <meta name="description" content="輸入公開 Threads 帳號，取得近期貼文能力值、RPG 職業與可分享的貓咪小卡。">
+  <title>Threads 貓咪冒險者｜擴充功能小卡</title>
+  <meta name="description" content="從脆文雷達 Chrome 擴充功能讀取自己的文案，產生可分享的貓咪職業小卡。">
   <style>
     :root {
       --paper: #f7f0e3;
@@ -40,9 +40,10 @@
     h1, h2, p { margin: 0; }
     h1 { font-size: clamp(2.1rem, 6vw, 4.7rem); letter-spacing: -.055em; line-height: .98; max-width: 760px; }
     .hero-copy { color: var(--ink-soft); font-size: 1.06rem; line-height: 1.75; max-width: 720px; }
-    .search { display: flex; flex-wrap: wrap; gap: 11px; align-items: center; margin-top: 4px; }
-    .search input { flex: 1 1 280px; min-width: 0; border: 2px solid var(--line); border-radius: 13px; background: var(--white); color: var(--ink); padding: 15px 17px; font-size: 1.04rem; outline: none; }
-    .search input:focus { box-shadow: 0 0 0 4px rgba(216,154,67,.25); }
+    .extension-entry { display: flex; flex-wrap: wrap; gap: 11px; align-items: center; margin-top: 4px; }
+    .entry-link { display: inline-flex; align-items: center; justify-content: center; border: 2px solid var(--line); border-radius: 13px; background: var(--ink); color: var(--white); padding: 14px 19px; font: inherit; font-weight: 800; text-decoration: none; transition: transform .15s ease, box-shadow .15s ease; }
+    .entry-link:hover { transform: translateY(-2px); box-shadow: 0 7px 0 rgba(24,38,59,.18); }
+    .entry-link.secondary { background: var(--white); color: var(--ink); }
     button { border: 2px solid var(--line); border-radius: 13px; background: var(--ink); color: var(--white); padding: 14px 19px; font: inherit; font-weight: 800; cursor: pointer; transition: transform .15s ease, box-shadow .15s ease; }
     button:hover { transform: translateY(-2px); box-shadow: 0 7px 0 rgba(24,38,59,.18); }
     button.secondary { background: var(--white); color: var(--ink); }
@@ -136,16 +137,16 @@
 </head>
 <body>
   <main class="page">
-    <div class="topline"><a href="https://radar.runing9to5.com/">脆文雷達</a><span>公開帳號小卡體驗</span></div>
+    <div class="topline"><a href="https://radar.runing9to5.com/">脆文雷達</a><span>擴充功能小卡體驗</span></div>
     <section class="frame hero">
-      <div class="eyebrow">THREADS ADVENTURER · PUBLIC PROFILE CHECK</div>
-      <h1>輸入帳號，領一張你的貓咪職業卡。</h1>
-      <p class="hero-copy">只讀公開 Threads 頁面最近 30 篇貼文，計算互動、討論、頻率、穩定與爆擊五個能力值，再把結果做成可以帶走的小卡。想進一步掌握自己的寫法，再把這張卡帶進脆文雷達。</p>
-      <form class="search" id="searchForm">
-        <input id="usernameInput" name="username" autocomplete="off" placeholder="輸入 @username，例如 @runing_9to5" aria-label="Threads username" required>
-        <button id="analyzeButton" type="submit">開始冒險</button>
-      </form>
-      <div id="status" class="status" role="status" aria-live="polite"></div>
+      <div class="eyebrow">THREADS ADVENTURER · EXTENSION CARD</div>
+      <h1>從自己的文案，<br>領一張貓咪職業卡。</h1>
+      <p class="hero-copy">Threads 目前會阻擋雲端爬蟲；正式流程改由你已登入的 Chrome 與脆文雷達擴充功能抓取自己的文案。Render 只負責展示卡面與未來的服務，不會代替你的瀏覽器爬取帳號。</p>
+      <div class="extension-entry">
+        <a class="entry-link" href="https://radar.runing9to5.com/#cat-card">開啟脆文雷達前台 →</a>
+        <a class="entry-link secondary" href="https://radar.runing9to5.com/dashboard.html">開啟主控台</a>
+      </div>
+      <div id="status" class="status" role="status" aria-live="polite">這裡先展示卡面；自己的資料請從 Chrome 擴充功能讀取。</div>
     </section>
 
     <section id="result" class="frame hidden" aria-live="polite">
@@ -218,11 +219,8 @@
       warrior: '⚔️', bard: '🎵', assassin: '🗡️', knight: '🛡️', mage: '🔮', villager: '🧭'
     };
     const CLASS_META = Object.fromEntries(Object.entries(professions).map(([key, value]) => [key, { ...value, icon: CLASS_ICONS[key] }]));
-    const form = document.querySelector('#searchForm');
-    const input = document.querySelector('#usernameInput');
     const status = document.querySelector('#status');
     const result = document.querySelector('#result');
-    const button = document.querySelector('#analyzeButton');
     let current = null;
 
     function setStatus(message, kind = '') {
@@ -309,26 +307,6 @@
       result.classList.remove('hidden');
     }
 
-    async function run(username) {
-      const clean = username.trim();
-      button.disabled = true;
-      setStatus('正在讀取公開頁面並計算能力值…');
-      try {
-        const response = await fetch(`/api/analyze?username=${encodeURIComponent(clean)}`);
-        const payload = await response.json();
-        if (!response.ok || payload.ok !== true) throw new Error(payload.message || '目前無法完成分析');
-        render(payload.analysis);
-        const url = new URL(window.location.href);
-        url.searchParams.set('username', payload.username);
-        window.history.replaceState({}, '', url);
-        setStatus(`完成：已讀取 ${payload.analysis.source.sampleCount} 篇公開貼文。`, 'success');
-      } catch (error) {
-        setStatus(error.message || '目前無法完成分析，請稍後再試。', 'error');
-      } finally {
-        button.disabled = false;
-      }
-    }
-
     async function canvasBlob() {
       if (!current) return null;
       const canvas = document.createElement('canvas');
@@ -383,16 +361,29 @@
       }
     });
 
-    form.addEventListener('submit', (event) => {
-      event.preventDefault();
-      run(input.value);
-    });
-
-    const initial = new URLSearchParams(window.location.search).get('username');
-    if (initial) {
-      input.value = initial.startsWith('@') ? initial : `@${initial}`;
-      run(input.value);
-    }
+    const demoPosts = Array.from({ length: 30 }, (_, index) => ({
+      interactions: 18 + ((index * 17) % 86),
+      posted_at: new Date(Date.now() - (30 - index) * 86400000).toISOString()
+    }));
+    const demoAnalysis = {
+      username: 'your_threads_name',
+      generatedAt: new Date().toISOString(),
+      source: { sampleCount: demoPosts.length },
+      battlePower: 62.06,
+      level: 6,
+      profession: { key: 'assassin', label: '刺客', description: '爆擊型' },
+      sample: { activeDays: 18, postsPerWeek: 4.8, totalInteractions: 1680 },
+      dimensions: [
+        { label: '攻擊', score: 78, icon: '⚔️' },
+        { label: '魅力', score: 66, icon: '✨' },
+        { label: '敏捷', score: 71, icon: '⚡' },
+        { label: '穩定', score: 58, icon: '🛡️' },
+        { label: '爆擊', score: 84, icon: '💥' }
+      ],
+      posts: demoPosts
+    };
+    render(demoAnalysis);
+    setStatus('這是示範卡面；要產生自己的卡，請回到脆文雷達前台使用 Chrome 擴充功能。');
   </script>
 </body>
 </html>

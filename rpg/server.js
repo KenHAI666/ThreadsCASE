@@ -258,7 +258,7 @@ const server = http.createServer(async (request, response) => {
       sendJson(response, 503, {
         ok: false,
         error: 'public_scrape_disabled',
-        message: '公開抓取目前暫停，請明天再試。'
+        message: '公開抓取已停用；請回到脆文雷達前台，使用 Chrome 擴充功能讀取自己的文案。'
       });
       return;
     }
