@@ -118,6 +118,18 @@
     .hero-art strong { display: block; color: var(--navy); font-size: 17px; line-height: 1.45; }
     .hero-art span { display: block; margin-top: 5px; color: var(--muted); font-size: 13px; line-height: 1.5; }
 
+    .cat-section { padding-top: 20px; }
+    .cat-preview { display: grid; grid-template-columns: minmax(0, .88fr) minmax(320px, 1.12fr); gap: 38px; align-items: center; padding: 34px; border: 1px solid var(--line); border-radius: 24px; background: linear-gradient(135deg, #fff 0%, #fbf6ed 100%); box-shadow: 0 16px 45px rgba(20, 33, 61, .07); }
+    .cat-preview-copy h2 { margin-top: 16px; }
+    .cat-preview-copy .lead { font-size: 17px; }
+    .cat-preview-copy ul { margin: 19px 0 0; padding-left: 20px; color: #454b54; }
+    .cat-preview-copy li { margin: 7px 0; }
+    .cat-preview-card { min-width: 0; padding: 14px; border: 1px solid #d9d0c3; border-radius: 18px; background: #f5eee3; }
+    .cat-preview-card canvas { display: block; width: 100%; height: auto; border-radius: 10px; background: #f8f2e7; }
+    .cat-preview-label { display: flex; justify-content: space-between; gap: 12px; margin: 0 3px 10px; color: var(--navy); font-size: 12px; font-weight: 800; letter-spacing: .06em; }
+    .cat-preview-label span { color: var(--muted); font-weight: 600; letter-spacing: 0; }
+    .cat-preview-status { margin: 10px 3px 0; }
+
     .section { padding: 64px 0; scroll-margin-top: 78px; }
     .section-head { max-width: 720px; margin-bottom: 29px; }
     .section-head p { margin-bottom: 0; font-size: 16px; }
@@ -175,6 +187,9 @@
       .hero-grid { gap: 30px; }
       h1 { font-size: clamp(47px, 13vw, 66px); }
       .lead { font-size: 17px; }
+      .cat-section { padding-top: 0; }
+      .cat-preview { grid-template-columns: 1fr; gap: 24px; padding: 20px; }
+      .cat-preview-copy .lead { font-size: 16px; }
       .section { padding: 48px 0; }
       .steps { grid-template-columns: 1fr; }
       .card, .card:nth-child(4), .card:nth-child(5) { grid-column: auto; min-height: 0; }
@@ -203,7 +218,7 @@
       <a class="brand" href="#top">脆文雷達</a>
       <div class="nav-links">
         <a class="button secondary" id="open-dashboard" href="dashboard.html">開啟主控台 →</a>
-        <a class="button secondary" href="cat-card.html">用我的文案產生小卡 →</a>
+        <a class="button secondary" href="#cat-card">看貓咪小卡 →</a>
         <a class="button secondary" href="https://threads-adventurer.onrender.com/">領取貓咪小卡 →</a>
         <a href="#guide">操作介紹</a>
         <a href="#plans">方案比較</a>
@@ -248,6 +263,33 @@
             <li>用貓咪小卡看見自己的 Threads 職業</li>
           </ul>
         </aside>
+      </div>
+    </section>
+
+    <section class="section cat-section" id="cat-card">
+      <div class="wrap">
+        <div class="cat-preview">
+          <div class="cat-preview-copy">
+            <span class="eyebrow"><span class="dot" aria-hidden="true"></span>前台主視覺・貓咪小卡</span>
+            <h2>小卡就在這裡，<br>不用另外找頁面。</h2>
+            <p class="lead">貓咪小卡直接融入脆文雷達前台。先看懂卡面怎麼呈現，再輸入公開帳號產生你的版本。</p>
+            <ul>
+              <li>上方顯示 LV 與 Threads 職業</li>
+              <li>中段顯示戰鬥力與五維能力</li>
+              <li>下方保留職業介紹與樣本數</li>
+              <li>手機版會完整縮放，不裁切卡面</li>
+            </ul>
+            <div class="actions">
+              <a class="button primary" href="https://threads-adventurer.onrender.com/">輸入帳號產生小卡 →</a>
+              <button class="button secondary" id="load-local-card" type="button">讀取本機文案 →</button>
+            </div>
+          </div>
+          <div class="cat-preview-card">
+            <div class="cat-preview-label"><strong>貓咪小卡預覽</strong><span>示範資料</span></div>
+            <canvas id="landing-cat-card" width="1080" height="1350" aria-label="脆文雷達貓咪小卡預覽"></canvas>
+            <p id="landing-card-status" class="mini muted cat-preview-status">這是前台示範卡；輸入帳號後會產生你的資料。</p>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -403,5 +445,73 @@
       <div class="footer-support">客服信箱<br><a href="mailto:uncleken@runing9to5.com">uncleken@runing9to5.com</a></div>
     </div>
   </footer>
+  <script type="module">
+    import { drawCard } from './rpg/assets/card.js';
+    import { analyzeCatPosts } from './rpg/assets/cat-card-analyzer.js';
+
+    const canvas = document.querySelector('#landing-cat-card');
+    const status = document.querySelector('#landing-card-status');
+    const localButton = document.querySelector('#load-local-card');
+    const EXTENSION_IDS = ['alkieogigpplbmifheoldfeejnmpkbmn', 'aaaihgbgeagjlblhfmacjokjemeidgnf'].filter(Boolean);
+    const bridge = (type, payload = {}) => new Promise((resolve, reject) => {
+      if (!globalThis.chrome?.runtime?.sendMessage) {
+        reject(new Error('找不到脆文雷達擴充功能'));
+        return;
+      }
+      let index = 0;
+      const attempt = () => {
+        if (index >= EXTENSION_IDS.length) {
+          reject(new Error('無法連接脆文雷達'));
+          return;
+        }
+        chrome.runtime.sendMessage(EXTENSION_IDS[index++], { type, ...payload }, (response) => {
+          if (chrome.runtime.lastError || !response) {
+            attempt();
+            return;
+          }
+          if (!response.ok) reject(new Error(response.error || '主控台操作失敗'));
+          else resolve(response.data);
+        });
+      };
+      attempt();
+    });
+    const ownPost = (post) => ['my_account', 'own'].includes(post.content_scope);
+    const renderLocalCard = async () => {
+      if (!canvas || !status) return;
+      localButton?.setAttribute('disabled', '');
+      status.textContent = '正在讀取這台 Chrome 的本機文案…';
+      try {
+        const snapshot = await bridge('BRIDGE_SNAPSHOT');
+        const posts = (snapshot.posts || []).filter(ownPost);
+        if (!posts.length) throw new Error('尚未找到自己的文案，請先在主控台抓取文章。');
+        const analysis = analyzeCatPosts(posts, { requestedCount: 100, fetchSuccess: true });
+        await drawCard(canvas, analysis);
+        status.textContent = `已用 ${analysis.source.sampleCount} 篇自己的文案更新前台小卡。`;
+      } catch (error) {
+        status.textContent = `${error.message || '無法讀取本機文案'} 目前先顯示示範卡。`;
+      } finally {
+        localButton?.removeAttribute('disabled');
+      }
+    };
+    if (canvas) {
+      drawCard(canvas, {
+        username: 'your_threads_name',
+        level: 6,
+        profession: { key: 'assassin' },
+        battlePower: 62.06,
+        dimensions: [
+          { label: '攻擊', score: 78 },
+          { label: '魅力', score: 66 },
+          { label: '敏捷', score: 71 },
+          { label: '穩定', score: 58 },
+          { label: '爆擊', score: 84 }
+        ],
+        source: { sampleCount: 30 }
+      }).catch(() => {
+        if (status) status.textContent = '卡面預覽載入失敗，請重新整理頁面。';
+      });
+    }
+    localButton?.addEventListener('click', renderLocalCard);
+  </script>
 </body>
 </html>
