@@ -1,6 +1,6 @@
 # 脆文雷達客戶前台
 
-貓咪小卡是免費入口與小範圍引流測試；小卡完成後導向脆文雷達，先用 Free 完成自己的文案抓取與分析，再申請 PRO 早鳥內測。收費方案、會員到期與付款 Webhook 的執行流程記錄在主專案 `docs/PAID_LAUNCH_PLAN.md`。
+貓咪小卡是免費入口與小範圍引流測試；小卡完成後導向脆文雷達，透過 Chrome 擴充功能完成自己的文案抓取與分析，再申請 PRO 早鳥內測。雲端 Render 只提供卡面展示與未來服務，不直接爬取 Threads。收費方案、會員到期與付款 Webhook 的執行流程記錄在主專案 `docs/PAID_LAUNCH_PLAN.md`。
 
 這個 Repository 是脆文雷達的公開客戶前台，透過 GitHub Pages 提供：
 
@@ -21,4 +21,4 @@ Threads 文案、留言、分析、監控規則與回覆紀錄保存在使用者
 
 GitHub Pages 請使用 `main` 分支根目錄部署。綁定自有網域後，需同步更新 Chrome 擴充功能的 `externally_connectable` 與主控台可信來源。
 
-貓咪小卡頁面會透過擴充功能 bridge 讀取本機 IndexedDB 的分析資料；它不會從公開伺服器重新抓取 Threads，也不會把原始文案送到這個 Repository。完整資料流與五維計算見主專案 `docs/THREADS_RADAR_CAT_CARD.md`。
+貓咪小卡頁面會透過擴充功能 bridge 讀取本機 IndexedDB 的分析資料；它不會從公開伺服器重新抓取 Threads，也不會把原始文案送到這個 Repository。完整操作、分支與部署驗收見 [`docs/FINAL_RELEASE_RUNBOOK.md`](docs/FINAL_RELEASE_RUNBOOK.md)。
