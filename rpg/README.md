@@ -2,6 +2,25 @@
 
 這個目錄用來開發「Threads 冒險者」公開網頁工具。
 
+## 網頁 MVP
+
+目前已接上可直接操作的網頁：
+
+```bash
+cd /Users/ken/ThreadsCASE/rpg
+npm run web
+```
+
+瀏覽器開啟 `http://127.0.0.1:8787/`，輸入 `@username` 後，網頁會呼叫 `/api/analyze`，讀取公開 Threads 頁面最近 30 篇貼文，顯示五維能力、職業、戰鬥力與互動走勢，並在瀏覽器本機產生可下載／分享的 1080×1350 PNG 小卡。
+
+`server.js` 是可部署的 Node HTTP API：`PORT` 與 `HOST` 可由環境變數指定，結果會以帳號快取 6 小時。前端是 `index.html`，目前使用 `assets/bard-cat.png` 作為吟遊詩人示範素材；其他職業先以職業圖示呈現，之後可直接替換成各職業素材。
+
+## 免費上線方式
+
+專案根目錄的 `render.yaml` 已準備好 Render Free 設定。建立 Render Web Service 時連接這個 GitHub repository，選擇 Blueprint 部署即可。服務會使用 `rpg/` 作為 root directory，啟動 `npm run web`，並由 Render 注入 `PORT`。
+
+上線前的保護已包含：同一帳號快取、同時最多 2 個抓取任務、單一來源每分鐘最多 10 次分析請求。這些限制是小遊戲公開測試用的保護，之後做脆文雷達時要改成正式的工作佇列與持久化儲存。
+
 ## 產品流程
 
 1. 使用者輸入公開 Threads 帳號（例如 `@runing_9to5`）

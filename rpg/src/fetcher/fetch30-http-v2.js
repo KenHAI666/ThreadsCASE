@@ -1,4 +1,6 @@
 import { mkdir, writeFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { normalizeUsername } from './threads-public.js';
 import { parseHydrationData } from './hydration-parser.js';
 
@@ -177,8 +179,20 @@ function collectErrors(value, out = [], depth = 0) {
   return [...new Set(out)];
 }
 
+function parseBootstrap(response, html, bootstrapFallback = false) {
+  const hydration = parseHydrationData(html, username);
+  return {
+    response,
+    html,
+    posts: hydration.posts || [],
+    userId: extractUserId(html),
+    cursor: extractCursor(html),
+    bootstrapFallback
+  };
+}
+
 async function bootstrapPublicProfile() {
-  const response = await fetch(profileUrl, {
+  const directResponse = await fetch(profileUrl, {
     redirect: 'follow',
     headers: {
       'user-agent': PROFILE_UA,
@@ -186,15 +200,43 @@ async function bootstrapPublicProfile() {
       'accept-language': 'zh-TW,zh;q=0.9,en;q=0.7'
     }
   });
-  const html = await response.text();
-  const hydration = parseHydrationData(html, username);
-  return {
-    response,
-    html,
-    posts: hydration.posts || [],
-    userId: extractUserId(html),
-    cursor: extractCursor(html)
-  };
+  const directHtml = await directResponse.text();
+  const direct = parseBootstrap(directResponse, directHtml);
+  if (direct.response.ok && direct.posts.length > 0 && direct.userId && direct.cursor) return direct;
+
+  // Some Render egress IPs receive an app shell until an anonymous home
+  // session is established first. Retry the profile with the cookies minted
+  // by `/`, matching the browser-like bootstrap used by Threads itself.
+  const cookies = new Map();
+  mergeCookies(cookies, directResponse.headers);
+  const homeResponse = await fetch(`${ORIGIN}/`, {
+    redirect: 'follow',
+    headers: {
+      'user-agent': BROWSER_UA,
+      accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'accept-language': 'zh-TW,zh;q=0.9,en;q=0.7',
+      'x-ig-app-id': APP_ID,
+      cookie: cookieHeader(cookies)
+    }
+  });
+  const homeHtml = await homeResponse.text();
+  mergeCookies(cookies, homeResponse.headers);
+  const retryResponse = await fetch(profileUrl, {
+    redirect: 'follow',
+    headers: {
+      'user-agent': PROFILE_UA,
+      accept: 'text/html,application/xhtml+xml',
+      'accept-language': 'zh-TW,zh;q=0.9,en;q=0.7',
+      'x-ig-app-id': APP_ID,
+      cookie: cookieHeader(cookies)
+    }
+  });
+  const retryHtml = await retryResponse.text();
+  const retry = parseBootstrap(retryResponse, retryHtml, true);
+  // Keep the fallback response as the authoritative bootstrap, but retain
+  // the home HTML in memory so the session builder can recover an LSD token.
+  if (!extractLsd(retryHtml)) retry.html = `${retryHtml}\n${homeHtml}`;
+  return retry;
 }
 
 async function buildAnonymousSession(profileBootstrap) {
@@ -281,12 +323,19 @@ async function fetchPage({ session, userId, cursor, docId }) {
   };
 }
 
-await mkdir(new URL('../../debug/', import.meta.url), { recursive: true });
-const reportPath = new URL(`../../debug/${username}.30posts-http.json`, import.meta.url);
+const defaultReportPath = fileURLToPath(new URL(`../../debug/${username}.30posts-http.json`, import.meta.url));
+const reportPath = resolve(process.argv[3] || defaultReportPath);
+await mkdir(dirname(reportPath), { recursive: true });
+
+async function writeFailureReport(report) {
+  await writeFile(reportPath, JSON.stringify(report, null, 2), 'utf8');
+  console.log(JSON.stringify(report, null, 2));
+  process.exit(2);
+}
 
 const bootstrap = await bootstrapPublicProfile();
 if (!bootstrap.response.ok || !bootstrap.userId || !bootstrap.cursor || bootstrap.posts.length === 0) {
-  console.log(JSON.stringify({
+  await writeFailureReport({
     username,
     success: false,
     stage: 'profile_bootstrap',
@@ -294,22 +343,21 @@ if (!bootstrap.response.ok || !bootstrap.userId || !bootstrap.cursor || bootstra
     initialCount: bootstrap.posts.length,
     userIdFound: Boolean(bootstrap.userId),
     cursorFound: Boolean(bootstrap.cursor),
-    htmlBytes: Buffer.byteLength(bootstrap.html, 'utf8')
-  }, null, 2));
-  process.exit(2);
+    htmlBytes: Buffer.byteLength(bootstrap.html, 'utf8'),
+    bootstrapFallback: bootstrap.bootstrapFallback === true
+  });
 }
 
 const session = await buildAnonymousSession(bootstrap);
 if (!session.lsd) {
-  console.log(JSON.stringify({
+  await writeFailureReport({
     username,
     success: false,
     stage: 'anonymous_session',
     initialCount: bootstrap.posts.length,
     cursorFound: true,
     reason: 'lsd_not_found'
-  }, null, 2));
-  process.exit(2);
+  });
 }
 
 const byCode = new Map(bootstrap.posts.filter((p) => p?.code).map((p) => [p.code, p]));
@@ -354,9 +402,16 @@ const posts = [...byCode.values()]
   .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
   .slice(0, TARGET);
 
+// A complete result either reaches the requested sample size or proves that
+// Threads has no next page. If a cursor is still live after an empty/failed
+// page, keep the partial sample marked incomplete so the API cannot present it
+// as a finished analysis.
+const complete = posts.length >= TARGET || hasNextPage === false || !cursor;
+
 const report = {
   username,
   success: posts.length >= TARGET,
+  complete,
   browserUsed: false,
   loginUsed: false,
   initialCount: bootstrap.posts.length,

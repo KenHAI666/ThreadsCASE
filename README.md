@@ -12,10 +12,13 @@ Threads 文案、留言、分析、監控規則與回覆紀錄保存在使用者
 
 ## 頁面
 
-- `index.html`：產品首頁
+- `index.html`：產品首頁，並直接嵌入貓咪小卡預覽與本機文案讀取入口
 - `dashboard.html`：客戶主控台
+- `cat-card.html`：保留給舊連結使用的獨立小卡頁；主流程已整合到首頁
 - `privacy.html`：隱私政策
 
 ## 部署
 
 GitHub Pages 請使用 `main` 分支根目錄部署。綁定自有網域後，需同步更新 Chrome 擴充功能的 `externally_connectable` 與主控台可信來源。
+
+貓咪小卡頁面會透過擴充功能 bridge 讀取本機 IndexedDB 的分析資料；它不會從公開伺服器重新抓取 Threads，也不會把原始文案送到這個 Repository。完整資料流與五維計算見主專案 `docs/THREADS_RADAR_CAT_CARD.md`。

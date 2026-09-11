@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: threads-adventurer
+    runtime: node
+    rootDir: rpg
+    plan: free
+    branch: deploy/threads-adventurer
+    healthCheckPath: /api/health
+    buildCommand: npm ci
+    startCommand: npm run web
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: HOST
+        value: "0.0.0.0"
+      - key: RPG_MAX_CONCURRENT
+        value: "2"
+      - key: RPG_RATE_LIMIT_PER_MIN
+        value: "10"
+      - key: RPG_PUBLIC_ANALYZE_ENABLED
+        value: "false"
