@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#f5f4ef">
-  <meta name="description" content="脆文雷達：抓取自己的 Threads 文章、探索公開主題內容，建立 Chrome 本機文案庫，並設定自己的貼文關鍵字自動回覆。不需 Meta API，也不需 Google Drive 權限。">
+  <meta name="description" content="脆文雷達：讓貓咪幫你抓自己的 Threads 文案，保存到 Chrome 本機文案庫，再用貓咪小卡看懂你的寫作樣子。不需 Meta API，也不需 Google Drive 權限。">
   <title>脆文雷達｜你的文案，你的資料</title>
   <style>
     :root {
@@ -113,6 +113,10 @@
     .hero-card h3 { margin-top: 18px; font-size: 21px; }
     .hero-card ul { margin: 14px 0 0; padding-left: 20px; color: #454b54; }
     .hero-card li { margin: 7px 0; }
+    .hero-art { display: flex; align-items: center; gap: 16px; padding: 10px 0 4px; }
+    .hero-art img { width: 122px; height: 122px; object-fit: contain; border-radius: 18px; background: #f1e8dc; }
+    .hero-art strong { display: block; color: var(--navy); font-size: 17px; line-height: 1.45; }
+    .hero-art span { display: block; margin-top: 5px; color: var(--muted); font-size: 13px; line-height: 1.5; }
 
     .section { padding: 64px 0; scroll-margin-top: 78px; }
     .section-head { max-width: 720px; margin-bottom: 29px; }
@@ -217,9 +221,9 @@
       <div class="wrap hero-grid">
         <div>
           <span class="eyebrow"><span class="dot" aria-hidden="true"></span>簡單使用・資料留在本機</span>
-          <h1>你的文案，<br>你的資料。</h1>
-          <p class="lead">脆文雷達在你的瀏覽器中抓取、整理與保存內容。不需要授權 Google 雲端硬碟，也不會把你的文案資料庫上傳到我們的伺服器。</p>
-          <p class="promise">簡單使用。留在本機。由你掌控。</p>
+          <h1>讓貓咪，<br>幫你抓文案。</h1>
+          <p class="lead">貓咪先把你自己的 Threads 文案抓進瀏覽器，整理成一張可分享的小卡；再回到脆文雷達，看懂自己的寫作習慣與內容資料。</p>
+          <p class="promise">貓咪帶你開始。雷達幫你看懂。</p>
           <div class="actions">
             <a class="button primary" href="https://threads-adventurer.onrender.com/">先領一張貓咪小卡 →</a>
             
@@ -231,13 +235,17 @@
 
         <aside class="hero-card">
           <span class="status">目前版本 v1.0.3</span>
-          <h3>整理自己的文案，探索公開主題。</h3>
+          <div class="hero-art">
+            <img src="rpg/assets/warrior.png" alt="幫你抓文案的貓咪戰士" loading="lazy">
+            <div><strong>貓咪幫你抓文案</strong><span>先抓進 Chrome，再整理成你的專屬小卡。</span></div>
+          </div>
+          <h3>貓咪幫你抓，雷達幫你整理。</h3>
           <ul>
             <li>未登入每次可抓取 20 篇</li>
-            <li>登入後單次最多抓取 100 篇自己的文章、關鍵字結果或公開帳號內容</li>
+            <li>登入後單次最多抓取 100 篇自己的文章</li>
             <li>建立專屬的 Chrome 本機文案庫</li>
             <li>隨時匯出 CSV／JSON</li>
-            <li>自己的貼文出現關鍵字，自動送出回覆</li>
+            <li>用貓咪小卡看見自己的 Threads 職業</li>
           </ul>
         </aside>
       </div>
@@ -248,14 +256,14 @@
         <div class="split-panel">
           <div>
             <span class="eyebrow"><span class="dot" aria-hidden="true"></span>從小卡開始</span>
-            <h2 class="payment-title">先知道你的職業，<br>再整理你的文案。</h2>
-            <p class="muted">公開小卡是免費入口；完成後回到脆文雷達，用自己的 100 篇文案找出寫作習慣、高互動寫法與下一步。</p>
+            <h2 class="payment-title">先讓貓咪抓一輪，<br>再看懂你的文案。</h2>
+            <p class="muted">公開小卡是免費入口；完成後回到脆文雷達，用自己的文案找出寫作習慣與下一步。</p>
           </div>
           <div>
             <h3>兩段式體驗</h3>
             <ul class="muted">
               <li>先輸入公開帳號，取得可分享的貓咪職業卡。</li>
-              <li>再登入脆文雷達，抓取自己的文章並保存於 Chrome 本機。</li>
+              <li>再登入脆文雷達，讓貓咪抓取自己的文章並保存於 Chrome 本機。</li>
               <li>分析結果與文案資料留在自己的瀏覽器。</li>
             </ul>
             <div class="actions" style="margin-top:18px">
@@ -271,14 +279,14 @@
       <div class="wrap">
         <div class="section-head">
           <h2>五個步驟開始使用</h2>
-          <p class="muted">先抓取自己的文章，再用關鍵字或特定帳號探索公開內容；只有自己的貼文可設定監控與回覆。</p>
+          <p class="muted">讓貓咪抓取自己的文章，先完成文案庫與小卡；V3 才會加入關鍵字雷達。</p>
         </div>
         <div class="steps">
           <article class="card"><div class="step-no">1</div><h3>免費加入 Chrome</h3><p class="muted">前往 Chrome 線上應用程式商店，點擊「加到 Chrome」完成安裝。</p></article>
           <article class="card"><div class="step-no">2</div><h3>固定擴充功能</h3><p class="muted">點擊 Chrome 右上角的擴充功能圖示，將脆文雷達固定在工具列。</p></article>
-          <article class="card"><div class="step-no">3</div><h3>登入 Threads</h3><p class="muted">在 Chrome 登入 Threads，準備抓取自己的帳號文章或探索公開主題。</p></article>
+          <article class="card"><div class="step-no">3</div><h3>登入 Threads</h3><p class="muted">在 Chrome 登入 Threads，讓貓咪準備抓取自己的帳號文章。</p></article>
           <article class="card"><div class="step-no">4</div><h3>選擇抓取數量</h3><p class="muted">未登入每次最多 20 篇；登入後可選擇 20／50／100 篇。</p></article>
-          <article class="card"><div class="step-no">5</div><h3>保存並設定回覆</h3><p class="muted">將內容保存在 Chrome 本機；從自己的文章設定觸發文字與回覆內容。</p></article>
+          <article class="card"><div class="step-no">5</div><h3>產生貓咪小卡</h3><p class="muted">內容保存在 Chrome 本機；用同一批文案產生可下載、可分享的貓咪小卡。</p></article>
         </div>
       </div>
     </section>
@@ -287,7 +295,7 @@
       <div class="wrap">
         <div class="section-head">
           <h2>目前使用方式</h2>
-          <p class="muted">v1.0.3 目前提供內部測試。抓取資料會先保存於自己的 Chrome；即使會員同步暫時失敗，文案仍可在主控台查看。</p>
+          <p class="muted">V1 先完成抓取、文案庫、基本分析與貓咪小卡；V1.5 加入相對表現分數，V2 接入 Portaly 金流，V3 才加入關鍵字雷達。</p>
         </div>
         <div class="table-shell">
           <table class="compare">
@@ -299,12 +307,10 @@
               <tr><td>本機文案庫</td><td>不保存</td><td class="yes">最多 300 篇</td><td>保存在 Chrome 本機</td></tr>
               <tr><td>CSV／JSON 下載</td><td class="yes">可以</td><td class="yes">可以</td><td class="yes">可以</td></tr>
               <tr><td>本機文案庫與基本分析</td><td class="no">不提供</td><td class="yes">可以</td><td class="yes">可以</td></tr>
-              <tr><td>定期關鍵字探索</td><td class="no">不提供</td><td>1 組</td><td>3 組</td></tr>
-              <tr><td>同時監控貼文</td><td class="no">不提供</td><td>1 篇</td><td>3 篇</td></tr>
-              <tr><td>每篇觸發關鍵字</td><td class="no">不提供</td><td>1 個</td><td>5 個</td></tr>
-              <tr><td>自動回覆額度</td><td class="no">不提供</td><td>累積 100 則</td><td>每月最多 500 則</td></tr>
-              <tr><td>執行紀錄保留</td><td class="no">不提供</td><td>7 天</td><td>90 天</td></tr>
-              <tr><td>收費與方案到期</td><td class="no">—</td><td class="no">目前免費</td><td>付款後人工／Webhook 開通，到期自動回到 Free</td></tr>
+              <tr><td>貓咪小卡</td><td class="yes">可以</td><td class="yes">可以</td><td class="yes">可以</td></tr>
+              <tr><td>V1.5 相對表現分數</td><td class="no">尚未提供</td><td>後續加入</td><td>包含</td></tr>
+              <tr><td>V2 Portaly 金流與方案</td><td class="no">—</td><td class="no">目前免費</td><td>V2 開始提供</td></tr>
+              <tr><td>V3 關鍵字雷達</td><td class="no">尚未提供</td><td class="no">尚未提供</td><td>V3 開始提供</td></tr>
               <tr><td>Google 登入</td><td class="yes">不需要</td><td>需要</td><td>需要</td></tr>
               <tr><td>Meta API 授權</td><td class="yes">不需要</td><td class="yes">不需要</td><td class="yes">不需要</td></tr>
               <tr><td>Google Drive 權限</td><td class="yes">不需要</td><td class="yes">不需要</td><td class="yes">不需要</td></tr>
@@ -314,8 +320,8 @@
           </table>
         </div>
         <div class="plan-notes">
-          <p class="mini muted">抓取額度按本次實際取得的篇數計算；重複文章會剔除、不重複保存，並分別顯示「本次抓取／重複剔除／新增保存」。抓取失敗會回復預留額度。只有擴充功能成功直接送出的自動回覆會計入用量；人工在 Threads 按下送出的回覆無法可靠驗證，因此不假裝統計。</p>
-          <p class="mini muted">自動回覆運作時，請保持 Chrome 開啟、Threads 維持登入，並避免電腦進入休眠。</p>
+          <p class="mini muted">抓取額度按本次實際取得篇數計算；重複文章會剔除、不重複保存，並分別顯示「本次抓取／重複剔除／新增保存」。</p>
+          <p class="mini muted">V2 金流正式開放前，先以 Email 登記；付款事件與會員狀態由 Portaly／GAS 處理，Threads 原文仍留在自己的 Chrome。</p>
         </div>
       </div>
     </section>
@@ -325,19 +331,18 @@
         <div class="split-panel">
           <div>
             <span class="eyebrow"><span class="dot" aria-hidden="true"></span>小範圍收費測試</span>
-            <h2 class="payment-title">貓咪小卡先引流，<br>雷達 PRO 開始驗證。</h2>
-            <p class="muted">貓咪小卡是免費入口，用來讓你先看到自己的 Threads 職業與分享結果。脆文雷達 PRO 早鳥內測暫定 NT$199／月，提供更高用量、更多規則與 90 天執行紀錄；目前先以小範圍測試驗證使用與付費意願。</p>
+            <h2 class="payment-title">貓咪小卡先引流，<br>V2 再接 Portaly 金流。</h2>
+            <p class="muted">貓咪小卡是免費入口，用來讓你先看到自己的 Threads 職業與分享結果。V2 的脆文雷達 PRO 早鳥內測暫定 NT$199／月，付款後提供會員權益與手動 VIP／PRO 備援。</p>
             <div class="actions" style="margin-top:18px"><a class="button primary" href="mailto:uncleken@runing9to5.com?subject=%E8%84%86%E6%96%87%E9%9B%B7%E9%81%94%20PRO%20%E6%97%A9%E9%B3%A5%E6%B8%AC%E8%A9%A6">寄信申請 PRO 早鳥測試</a></div>
           </div>
           <div>
             <h3>使用提醒</h3>
             <ul class="muted">
               <li>未登入每次可抓取 20 篇；Google 登入後單次最多 100 篇。</li>
-              <li>特定帳號只讀取公開內容作為觀察與比較，不提供監控或回覆。</li>
+              <li>V1 只處理自己的文案；關鍵字公開內容排到 V3。</li>
               <li>文案與設定預設保存在自己的 Chrome，不會上傳為雲端文案庫。</li>
-              <li>自動回覆需保持 Chrome 開啟、Threads 維持登入，並受到 Threads 介面與平台限制影響。</li>
               <li>付款連結與 Webhook 完成設定前，先以 Email 登記、人工確認後開通。</li>
-              <li>付費只承諾目前頁面列出的本機功能與用量；進階 AI 分析、發文時機運算與雲端代抓另列後續版本。</li>
+              <li>付費只承諾目前頁面列出的本機功能與用量；自動回覆不在產品路線。</li>
             </ul>
           </div>
         </div>
@@ -348,12 +353,12 @@
       <div class="wrap">
         <div class="section-head">
           <h2>你的資料，<br>只留在你手上。</h2>
-          <p class="muted">從抓取文案到設定回覆，你的內容都在自己的瀏覽器中處理。</p>
+          <p class="muted">從貓咪抓取文案到產生小卡，你的內容都在自己的瀏覽器中處理。</p>
         </div>
         <div class="split-panel">
           <div>
             <h3>資料留在裝置上</h3>
-            <p class="muted">你的文案庫、收藏內容、監控規則與回覆紀錄，預設保存在 Chrome 本機。除非你主動匯出，內容不會上傳至我們的伺服器。</p>
+            <p class="muted">你的文案庫、分析結果與小卡資料，預設保存在 Chrome 本機。除非你主動匯出，內容不會上傳至我們的伺服器。</p>
             <h3>Google 只負責登入</h3>
             <p class="muted">Google 登入只用來確認你的帳號與方案。我們不要求 Google Drive 或 Google 試算表權限，也無法查看你的雲端硬碟。</p>
             <h3>不索取 Threads 密碼</h3>
@@ -361,13 +366,13 @@
           </div>
           <div>
             <h3>隨時帶走資料</h3>
-            <p class="muted">你可以隨時將文案與回覆紀錄匯出成 CSV 或 JSON。資料屬於你，也應該由你決定放在哪裡。</p>
+            <p class="muted">你可以隨時將文案與分析資料匯出成 CSV 或 JSON。資料屬於你，也應該由你決定放在哪裡。</p>
             <h3>刪除就是刪除</h3>
             <p class="muted">從本機文案庫刪除內容後，資料不會留在我們的雲端備份中，因為我們一開始就沒有保存它。</p>
             <h3>後台只保留必要資訊</h3>
             <ul class="muted">
               <li>Google 登入身分與會員方案。</li>
-              <li>抓取與自動回覆的使用額度。</li>
+              <li>V2 會員方案與抓取用量。</li>
               <li>服務運作所需的基本執行狀態。</li>
             </ul>
           </div>
@@ -379,8 +384,8 @@
       <div class="wrap">
         <div class="download-box">
           <div>
-            <h2>蒐集你想看的。<br>回覆你想接的。</h2>
-            <p class="muted">目前版本 v1.0.3。未登入也會保存並顯示本機文案；登入後可同步會員額度、設定關鍵字探索，並為自己的貼文設定自動回覆。</p>
+            <h2>讓貓咪抓文案。<br>讓你看懂自己。</h2>
+            <p class="muted">目前版本 v1.0.3。V1 先完成自己的文案抓取、分析、匯出與貓咪小卡；V1.5 分數、V2 金流、V3 關鍵字依路線加入。</p>
           </div>
           <div class="actions" style="margin-top:0">
             
