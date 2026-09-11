@@ -5,8 +5,18 @@
   "type": "module",
   "scripts": {
     "fetch": "node src/fetcher/cli.js",
+    "fetch:30": "node src/fetcher/fetch30-browser.js",
+    "fetch:30-http": "node src/fetcher/fetch30-http-v2.js",
     "fetch:debug": "node src/fetcher/debug.js",
+    "fetch:pagination": "node src/fetcher/pagination-debug.js",
+    "fetch:querymeta": "node src/fetcher/querymeta-debug.js",
+    "fetch:browser-network": "node src/fetcher/browser-network-debug.js",
+    "fetch:browser-login-network": "node src/fetcher/browser-login-network-debug.js",
+    "analyze:browser-network": "node src/fetcher/analyze-browser-network.js",
     "test": "node src/fetcher/test-parser.js"
+  },
+  "dependencies": {
+    "playwright-core": "^1.55.0"
   },
   "engines": {
     "node": ">=20"
