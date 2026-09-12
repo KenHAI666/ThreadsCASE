@@ -33,7 +33,7 @@ GAS 或 Render 不能直接讀取 Chrome 的 IndexedDB；「連接擴充功能�
 
 1. 開啟 [脆文雷達首頁](https://radar.runing9to5.com/)。
 2. 下載並解壓 `dist/threads-radar-extension-v1.0.4-final.zip`，在 `chrome://extensions` 開啟開發人員模式後載入。
-3. 在 Threads 登入自己的帳號，從擴充功能選「我的帳號」並執行抓取。未登入 Google 的本機模式先測 20 篇；登入會員後再測 100 篇。
+3. 在 Threads 登入自己的帳號，從擴充功能選「我的帳號」並執行抓取。未登入 Google 的本機模式先測 30 篇；登入 Google 後再測 100 篇，並確認累積上限 500 篇。
 4. 回到 [客戶主控台](https://radar.runing9to5.com/dashboard.html)，按重新整理，確認文案數與最近一次抓取紀錄。
 5. 開啟「貓咪小卡」，確認職業、LV、戰鬥力與五維資料，測試下載 PNG、手機系統分享，以及 Threads 發文入口。
 6. 在 Chrome 開發者工具確認流程沒有把原始文案送到 Render 或 GAS。
