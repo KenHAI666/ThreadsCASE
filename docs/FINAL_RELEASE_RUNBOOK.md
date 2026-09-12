@@ -36,6 +36,6 @@ PR 合併前先在 `deploy/threads-adventurer` 測試；合併後確認 GitHub P
 
 ## 擴充功能封裝
 
-使用根目錄原始碼重新載入 Chrome 擴充功能，或使用 `dist/threads-radar-extension-v1.0.4-final.zip`。載入後請確認 manifest 的版本為 `1.0.4`，並在 `radar.runing9to5.com` 測試「抓取我的文案」與「讀取本機文案」。
+使用根目錄原始碼重新載入 Chrome 擴充功能，或使用 `dist/threads-radar-extension-v1.0.5-test.zip`。載入後請確認 manifest 的版本為 `1.0.5`，並在 `radar.runing9to5.com` 測試「抓取我的文案」與「讀取本機文案」。
 
 V1 不提供雲端代抓、關鍵字探索、自動回覆、私訊或熱力圖；V1 不提供監控與回覆、人工候選或自動送出。
