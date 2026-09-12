@@ -12,7 +12,7 @@
 ## 服務分工
 
 - GitHub Pages：產品首頁、內嵌貓咪小卡預覽、客戶主控台與隱私說明。
-- Chrome Extension：Threads 頁面滾動抓取、去重、分析、匯出、人工候選流程與本機資料保存。
+- Chrome Extension：Threads 頁面滾動抓取、去重、分析、匯出、貓咪小卡與本機資料保存。
 - Render：貓咪小卡示範頁、圖片產生／分享服務預留、`/api/health` 健康檢查。公開 Threads 抓取端點保持停用。
 - GAS／會員後台：只處理 Google 身分、方案、用量與未來 Portaly 付款事件，不保存 Threads 原文。
 
@@ -38,4 +38,4 @@ PR 合併前先在 `deploy/threads-adventurer` 測試；合併後確認 GitHub P
 
 使用根目錄原始碼重新載入 Chrome 擴充功能，或使用 `dist/threads-radar-extension-v1.0.4-final.zip`。載入後請確認 manifest 的版本為 `1.0.4`，並在 `radar.runing9to5.com` 測試「抓取我的文案」與「讀取本機文案」。
 
-V1 不提供雲端代抓、關鍵字探索、自動回覆、私訊或熱力圖；監控只產生人工候選，送出動作由使用者在 Threads 親自完成。
+V1 不提供雲端代抓、關鍵字探索、自動回覆、私訊或熱力圖；V1 不提供監控與回覆、人工候選或自動送出。
