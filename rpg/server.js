@@ -13,6 +13,7 @@ const cacheTtlMs = Number(process.env.RPG_CACHE_TTL_MS || 6 * 60 * 60 * 1000);
 const concurrencyLimit = Math.max(1, Number(process.env.RPG_MAX_CONCURRENT || 2));
 const rateLimitPerMinute = Math.max(1, Number(process.env.RPG_RATE_LIMIT_PER_MIN || 10));
 const publicAnalyzeEnabled = process.env.RPG_PUBLIC_ANALYZE_ENABLED === 'true';
+const releaseVersion = process.env.RPG_RELEASE_VERSION || '1.0.4';
 const port = Number(process.env.PORT || 8787);
 const host = process.env.HOST || '127.0.0.1';
 const cache = new Map();
@@ -244,6 +245,7 @@ const server = http.createServer(async (request, response) => {
     sendJson(response, 200, {
       ok: true,
       service: 'threads-rpg',
+      releaseVersion,
       cacheTtlMs,
       concurrencyLimit,
       publicAnalyzeEnabled,
