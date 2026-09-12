@@ -133,6 +133,8 @@
       .power { text-align: left; }
       .power strong { font-size: 2.7rem; }
     }
+    .share-card.tier-silver { border-color: #607080; box-shadow: 8px 8px 0 #b8c2cc; background: #f2f4f6; }
+    .share-card.tier-gold { border-color: #9b6a12; box-shadow: 8px 8px 0 #e8b947; background: #fbf2dc; }
   </style>
 </head>
 <body>
@@ -216,7 +218,8 @@
     import { drawCard, professions } from '/assets/card.js';
 
     const CLASS_ICONS = {
-      warrior: '⚔️', bard: '🎵', assassin: '🗡️', knight: '🛡️', mage: '🔮', villager: '🧭'
+      warrior: '⚔️', bard: '🎵', assassin: '🗡️', knight: '🛡️', mage: '🔮', villager: '🧭',
+      swordmaster: '⚔️', legendary_bard: '🎵', shadowblade: '🗡️', paladin: '🛡️', archmage: '🔮'
     };
     const CLASS_META = Object.fromEntries(Object.entries(professions).map(([key, value]) => [key, { ...value, icon: CLASS_ICONS[key] }]));
     const status = document.querySelector('#status');
@@ -269,9 +272,12 @@
 
     function renderCard(analysis) {
       const meta = CLASS_META[analysis.profession?.key] || CLASS_META.villager;
-      const level = analysis.level || Math.max(1, Math.round(Number(analysis.battlePower || 0) / 10));
+      const stage = { villager: '村民', first: '一轉', second: '二轉' }[analysis.adventure?.jobStage] || '村民';
       const profession = analysis.profession?.label || meta.label;
-      document.querySelector('#cardLevelOverlay').innerHTML = `LV. ${String(level).padStart(2, '0')}<strong>${profession}</strong>`;
+      document.querySelector('#cardLevelOverlay').innerHTML = `${stage}<strong>${profession}</strong>`;
+      const card = document.querySelector('#shareCard');
+      card.classList.remove('tier-normal', 'tier-silver', 'tier-gold');
+      card.classList.add(`tier-${analysis.adventure?.cardTier || 'normal'}`);
       document.querySelector('#cardHandle').textContent = `@${analysis.username}`;
       document.querySelector('#cardClass').textContent = `${profession} · ${meta.subtitle}`;
       document.querySelector('#cardClass').style.color = meta.color;
@@ -288,7 +294,7 @@
       current = analysis;
       const meta = CLASS_META[analysis.profession?.key] || CLASS_META.villager;
       document.querySelector('#resultUsername').textContent = `@${analysis.username}`;
-      document.querySelector('#resultMeta').textContent = `${analysis.source.sampleCount} 篇有效公開貼文 · 產生於 ${new Date(analysis.generatedAt).toLocaleString('zh-TW')}`;
+      document.querySelector('#resultMeta').textContent = `已蒐集 ${analysis.adventure?.collectedPostCount ?? analysis.source.sampleCount} 篇 · ${analysis.adventure?.jobStage === 'second' ? '二轉' : analysis.adventure?.jobStage === 'first' ? '一轉' : '村民'} · 產生於 ${new Date(analysis.generatedAt).toLocaleString('zh-TW')}`;
       document.querySelector('#profession').innerHTML = `<span class="class-icon">${meta.icon}</span><span>${analysis.profession?.label || meta.label} · ${analysis.profession?.description || ''}</span>`;
       document.querySelector('#profession').style.background = meta.color;
       document.querySelector('#battlePower').textContent = number(analysis.battlePower, 2);
@@ -372,6 +378,7 @@
       battlePower: 62.06,
       level: 6,
       profession: { key: 'assassin', label: '刺客', description: '爆擊型' },
+      adventure: { jobStage: 'first', currentJob: 'assassin', baseJob: 'assassin', collectedPostCount: 183, cardTier: 'normal' },
       sample: { activeDays: 18, postsPerWeek: 4.8, totalInteractions: 1680 },
       dimensions: [
         { label: '攻擊', score: 78, icon: '⚔️' },

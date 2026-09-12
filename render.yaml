@@ -17,7 +17,7 @@ services:
         value: "2"
       - key: RPG_RATE_LIMIT_PER_MIN
         value: "10"
-          - key: RPG_PUBLIC_ANALYZE_ENABLED
-            value: "false"
-          - key: RPG_RELEASE_VERSION
-            value: "1.0.4"
+      - key: RPG_PUBLIC_ANALYZE_ENABLED
+        value: "false"
+      - key: RPG_RELEASE_VERSION
+        value: "1.0.5"

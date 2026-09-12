@@ -1,5 +1,6 @@
 // Shared source of truth for the public card and the local Radar card.
 // It accepts both the extension's IndexedDB post shape and the public fetcher's shape.
+import { advanceAdventure, jobMeta, normalizeBaseJob } from './adventure-system.js';
 export const TARGET_FIELDS = ['likes', 'replies', 'reposts', 'quotes', 'reshares'];
 
 function finite(value) {
@@ -99,13 +100,20 @@ export function analyzeCatPosts(inputPosts, options = {}) {
     { key: 'warrior', label: '戰士', description: '高頻輸出型', dimension: 'agility' },
     { key: 'bard', label: '吟遊詩人', description: '討論互動型', dimension: 'charm' },
     { key: 'assassin', label: '刺客', description: '爆擊型', dimension: 'critical' },
-    { key: 'knight', label: '騎士', description: '穩定經營型', dimension: 'stability' }
+    { key: 'knight', label: '騎士', description: '穩定經營型', dimension: 'stability' },
+    { key: 'mage', label: '法師', description: '內容實力型', dimension: 'attack' }
   ];
   const battlePower = round(mean(dimensionRows.map((row) => row.score)));
   const strongest = [...professionCandidates].sort((a, b) => scores[b.dimension] - scores[a.dimension])[0];
-  const profession = posts.length < 10
-    ? { key: 'villager', label: '村民', description: '有效樣本不足', basis: '樣本少於 10 篇' }
-    : { ...strongest, basis: `${strongest.label}取決於${dimensionRows.find((row) => row.key === strongest.dimension).label}分數最高` };
+  const collectedPostCount = Math.max(0, Math.floor(Number(options.collectedPostCount ?? rawPosts.length) || 0));
+  const previousAdventure = options.adventure && typeof options.adventure === 'object' ? options.adventure : {};
+  const candidateBaseJob = normalizeBaseJob(options.baseJob) || normalizeBaseJob(previousAdventure.baseJob) || (rawPosts.length >= 10 ? strongest.key : null);
+  const baseJob = collectedPostCount >= 100 ? candidateBaseJob : normalizeBaseJob(previousAdventure.baseJob);
+  const adventure = advanceAdventure(previousAdventure, { collectedPostCount, baseJob, cardTier: options.cardTier });
+  const selected = jobMeta(adventure.currentJob);
+  const profession = adventure.jobStage === 'villager'
+    ? { key: 'villager', label: '村民', description: '冒險尚未開始', basis: '累積唯一文案未滿 100 篇' }
+    : { key: selected.key, label: selected.label, description: selected.type, basis: `${selected.label}沿用${jobMeta(adventure.baseJob).label}的一轉判定` };
   const coverage = Object.fromEntries(TARGET_FIELDS.map((field) => {
     const available = posts.filter((post) => post[field] != null).length;
     return [field, { available, total: posts.length, rate: posts.length ? round(available / posts.length, 4) : 0 }];
@@ -121,6 +129,7 @@ export function analyzeCatPosts(inputPosts, options = {}) {
       loginUsed: options.loginUsed === true,
       sampleCount: posts.length,
       requestedCount: Number(options.requestedCount || 100),
+      collectedPostCount,
       scoreScope: 'within-account sample; no follower-normalized cross-account ranking'
     },
     coverage,
@@ -144,10 +153,12 @@ export function analyzeCatPosts(inputPosts, options = {}) {
       criticalRate: round(criticalRate, 4)
     },
     dimensions: dimensionRows,
-    level: posts.length ? Math.max(1, Math.min(99, Math.round(battlePower / 10))) : 1,
+    level: null,
     battlePower,
     profession,
-    disabled: { mage: '文字分析尚未啟用，避免把文字品質假設成數值分數' },
+    baseProfession: strongest,
+    adventure,
+    disabled: {},
     posts: posts.map((post) => ({
       code: post.code,
       url: post.url,

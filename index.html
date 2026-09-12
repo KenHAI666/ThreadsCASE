@@ -385,7 +385,7 @@
       };
       attempt();
     });
-    const ownPost = (post) => ['my_account', 'own'].includes(post.content_scope);
+    const ownPost = (post) => ['my_account', 'own'].includes(post.content_scope) || (!post.content_scope && ['profile', 'my_account'].includes(post.source_type));
     const renderLocalCard = async () => {
       if (!canvas || !status) return;
       localButton?.setAttribute('disabled', '');
@@ -394,7 +394,7 @@
         const snapshot = await bridge('BRIDGE_SNAPSHOT');
         const posts = (snapshot.posts || []).filter(ownPost);
         if (!posts.length) throw new Error('尚未找到自己的文案，請先在主控台抓取文章。');
-        const analysis = analyzeCatPosts(posts, { requestedCount: 100, fetchSuccess: true });
+        const analysis = analyzeCatPosts(posts, { requestedCount: 100, fetchSuccess: true, collectedPostCount: snapshot.adventure?.collectedPostCount ?? snapshot.posts_total ?? posts.length, adventure: snapshot.adventure, cardTier: snapshot.adventure?.cardTier });
         await drawCard(canvas, analysis);
         status.textContent = `已用 ${analysis.source.sampleCount} 篇自己的文案更新前台小卡。`;
       } catch (error) {
@@ -407,7 +407,7 @@
       drawCard(canvas, {
         username: 'your_threads_name',
         level: 6,
-        profession: { key: 'assassin' },
+        profession: { key: 'villager' },
         battlePower: 62.06,
         dimensions: [
           { label: '攻擊', score: 78 },
@@ -416,7 +416,8 @@
           { label: '穩定', score: 58 },
           { label: '爆擊', score: 84 }
         ],
-        source: { sampleCount: 30 }
+        source: { sampleCount: 30, collectedPostCount: 30 },
+        adventure: { jobStage: 'villager', currentJob: 'villager', collectedPostCount: 30, cardTier: 'normal' }
       }).catch(() => {
         if (status) status.textContent = '卡面預覽載入失敗，請重新整理頁面。';
       });

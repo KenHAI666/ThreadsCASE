@@ -39,7 +39,7 @@
 
     const EXTENSION_IDS = ['alkieogigpplbmifheoldfeejnmpkbmn', 'aaaihgbgeagjlblhfmacjokjemeidgnf'].filter(Boolean);
     const $ = (id) => document.getElementById(id);
-    const postScope = (post) => ['my_account', 'own'].includes(post.content_scope) ? 'my_account' : post.content_scope || 'other';
+    const postScope = (post) => ['my_account', 'own'].includes(post.content_scope) || (!post.content_scope && ['profile', 'my_account'].includes(post.source_type)) ? 'my_account' : post.content_scope || 'other';
 
     function bridge(type, payload = {}) {
       return new Promise((resolve, reject) => {
@@ -62,11 +62,12 @@
     function showError(message) { $('error').textContent = message; $('error').classList.remove('hidden'); $('status').classList.add('hidden'); }
     function setStatus(message) { $('status').textContent = message; $('status').classList.remove('hidden'); }
     function renderSummary(analysis) {
-      const values = [['分析樣本', `${number(analysis.source.sampleCount)} 篇`], ['戰鬥力', number(analysis.battlePower, 2)], ['活躍天數', `${number(analysis.sample.activeDays)} 天`], ['總互動', number(analysis.sample.totalInteractions)]];
+      const values = [['已蒐集', `${number(analysis.adventure?.collectedPostCount ?? analysis.source.sampleCount)} 篇`], ['分析樣本', `${number(analysis.source.sampleCount)} 篇`], ['戰鬥力', number(analysis.battlePower, 2)], ['卡面', String(analysis.adventure?.cardTier || 'normal').toUpperCase()]];
       $('summary').replaceChildren(...values.map(([label, value]) => { const item = document.createElement('div'); item.className = 'stat'; item.innerHTML = `<span>${label}</span><strong>${value}</strong>`; return item; }));
       const meta = professions[analysis.profession.key] || professions.villager;
       $('profession').textContent = `${analysis.profession.label} · ${meta.subtitle}`;
-      $('description').textContent = meta.intro;
+      const stageLabel = { villager: '村民', first: '一轉', second: '二轉' }[analysis.adventure?.jobStage] || '村民';
+      $('description').textContent = `${meta.intro}｜${stageLabel} · ${String(analysis.adventure?.cardTier || 'normal').toUpperCase()} 卡`;
       $('dimensions').replaceChildren(...analysis.dimensions.map((row) => { const item = document.createElement('div'); item.className = 'dimension'; item.innerHTML = `<span>${row.label}</span><span class="bar"><span style="width:${clamp(row.score)}%"></span></span><strong class="score">${number(row.score)}</strong>`; return item; }));
     }
 
@@ -75,14 +76,15 @@
       try {
         const snapshot = await bridge('BRIDGE_SNAPSHOT');
         const ownPosts = (snapshot.posts || []).filter((post) => postScope(post) === 'my_account');
-        if (!ownPosts.length) { setStatus('尚未找到自己的文案。請先回到主控台，在「我的帳號」抓取文案，再回來產生小卡。'); return; }
-        current = analyzeCatPosts(ownPosts, { requestedCount: 100, fetchSuccess: true });
+        current = analyzeCatPosts(ownPosts, { requestedCount: 100, fetchSuccess: true, collectedPostCount: snapshot.adventure?.collectedPostCount ?? ownPosts.length, adventure: snapshot.adventure, cardTier: snapshot.adventure?.cardTier });
         renderSummary(current);
         await drawCard($('card'), current);
         $('result').classList.remove('hidden');
-        if (current.source.sampleCount < 10) setStatus(`目前只有 ${current.source.sampleCount} 篇有效文案，先顯示村民卡；抓到 10 篇以上會開始判定職業。`);
-        else if (current.source.sampleCount < 100) setStatus(`已用 ${current.source.sampleCount} 篇自己的文案產生小卡。建議補抓到 100 篇，雷達結果會更穩定。`);
-        else setStatus('已用目前保存的 100 篇自己的文案產生小卡。');
+        if (current.adventure.transition === 'first') setStatus('轉職成功！你已蒐集 100 篇 Threads 文案。');
+        else if (current.adventure.transition === 'second') setStatus('二轉成功！長期累積讓你的經營風格再次進化。');
+        else if (current.adventure.jobStage === 'villager') setStatus(`已蒐集 ${current.adventure.collectedPostCount} 篇；再蒐集 ${Math.max(0, 100 - current.adventure.collectedPostCount)} 篇即可第一次轉職。`);
+        else if (current.adventure.jobStage === 'first') setStatus(`一轉完成：${current.profession.label}。再蒐集 ${Math.max(0, 500 - current.adventure.collectedPostCount)} 篇即可二轉。`);
+        else setStatus('二轉完成：你的 Threads 經營風格已進化。');
       } catch (error) { showError(error.message || '無法讀取脆文雷達資料'); }
     }
 
