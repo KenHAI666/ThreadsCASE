@@ -74,16 +74,24 @@
   }
   function renderLogs(){const root=el("section",null,{className:"panel"}),table=el("table",null),thead=el("thead"),row=el("tr");["時間","狀態","抓取篇數","新增保存","重複剔除"].forEach(text=>row.append(el("th",text)));thead.append(row);const body=el("tbody"),rows=snapshot.history||[];if(!rows.length){const tr=el("tr"),td=el("td","目前沒有抓取紀錄",{colspan:"5",className:"empty"});tr.append(td);body.append(tr)}else rows.forEach(log=>{const tr=el("tr");[fmt(log.created_at),log.status||"—",log.fetched??log.saved??"—",log.inserted??"—",log.duplicates??log.updated??"—"].forEach(value=>tr.append(el("td",value)));body.append(tr)});table.append(thead,body);root.append(el("h2","抓取執行紀錄"),el("div",null,{className:"table-wrap"}).appendChild(table).parentElement);return root}
   function buildAIPrompt(){
-    const rows=myPosts(),adventure=snapshot.adventure||{},count=Number(adventure.collectedPostCount??rows.length)||0,report=analyzeCatPosts(rows,{username:rows[0]?.username||snapshot.settings?.own_threads_username||"",requestedCount:rows.length||30,fetchSuccess:true,collectedPostCount:count,adventure,cardTier:adventure.cardTier}),job=professions[report.profession.key]||professions.villager,dimensions=report.dimensions.map(row=>`${row.label} ${row.score}`).join("｜"),postLines=rows.slice(0,500).map((post,index)=>{const date=post.published_date||post.published_at||post.posted_at||"日期未知",metrics=`讚 ${post.likes??"—"}、留言 ${post.replies??"—"}、轉發 ${post.reposts??"—"}、引用 ${post.quotes??"—"}`;return `### ${index+1}. ${date}
+    const rows=myPosts(),postLines=rows.slice(0,500).map((post,index)=>{const date=post.published_date||post.published_at||post.posted_at||"日期未知",metrics=`讚 ${post.likes??"—"}、留言 ${post.replies??"—"}、轉發 ${post.reposts??"—"}、引用 ${post.quotes??"—"}`;return `### 文案 ${index+1}｜${date}
 ${metrics}
 ${String(post.text||"（無文字內容）").trim()}`}).join("\n\n");
-    return [`你是 Threads 文案分析顧問。請只根據下方資料分析這個帳號，不要捏造沒有提供的數字或背景。`,
-      `請用繁體中文輸出：1. 帳號目前的內容優勢 2. 最值得複製的 3 種文案結構 3. 3 個具體優化建議 4. 下一步可測試的 5 個題目。`,
-      `帳號：@${report.username||snapshot.settings?.own_threads_username||"未知"}`,
-      `貓咪小卡職業：${job.label}｜${job.subtitle||job.description||"冒險尚未開始"}`,
-      `冒險階段：${({villager:"村民",first:"一轉",second:"二轉"}[adventure.jobStage]||"村民")}｜已蒐集 ${count} 篇唯一文案`,
-      `戰鬥力：${report.battlePower}｜五維：${dimensions||"尚無可計算資料"}`,
-      `分析範圍：只分析使用者自己的 Threads 文案；本次提供 ${rows.length} 篇本機保存資料。`,
+    return [
+      "現在你是專業的 Threads 文案分析師。請採用 K叔流派：先做判斷，再用文案與互動數字找證據，最後給能執行、能測試的調整。",
+      "這是一份文案診斷，不是整篇改寫，也不是空泛鼓勵。請保留原文的語氣與段落；除非特別要求，不要輸出完整重寫版本。",
+      "請只根據下方文案與每篇提供的互動數字，不要補寫未提供的背景、受眾規模、曝光、粉絲、收入或平台內部資料。資料不足時請明確寫「資料不足」，不要自行推測。",
+      "請用繁體中文，依照以下順序輸出：",
+      "一、決策結論：用 3–5 句說明目前最強的內容優勢、最大的瓶頸，以及最值得先做的一個調整。",
+      "二、受眾與內容任務：從文案證據推測正在對誰說、讀者的痛點／渴望／決策問題，以及這批內容想完成的任務；無法判斷的地方標示資料不足。",
+      "三、選題到 CTA 拆解：整理主題、Hook／開頭、承諾、正文結構、證據、情緒轉折、結尾與 CTA；指出哪些寫法值得保留，哪些只是表面互動。",
+      "四、轉換路徑：檢查內容是否完成注意力 → 共鳴／信任 → 行動；判斷 CTA 是只要求按讚留言，還是能把讀者導向清楚的下一步。",
+      "五、心理與傳播：從資訊缺口、身份認同、實用價值、故事性與可轉述性分析停留、留言、收藏與分享的理由，並指出最可能的分享動機。",
+      "六、逐篇診斷：挑出代表性文案，逐篇指出 Hook、承諾、證據、結尾與 CTA 的具體問題和可保留處。引用原句時保留原文，不要先替它改寫。",
+      "七、演算法風險檢查：逐項檢查 R1 互動誘餌、R2 Clickbait、R3 首句與正文不一致、R4 搬運或低原創、R5 連續同主題、R6 低品質外部連結、R7 敏感議題聳動表述、R8 負面回饋、R9 主題混雜、R10 未標示 AI、R11 圖文不一致、R12 軟性降權。沒有命中就寫「未發現」，不要把推測寫成平台確定規則。",
+      "八、AI 味檢查：找出過度工整、空泛、模板化或不像真人說話的句子，說明判斷依據；不要把自然口語誤判成 AI。",
+      "九、優先行動與測試：提出 3 個依優先順序排列的調整，每個都包含「改哪裡／為什麼／如何測試／看什麼結果」；最後提出 3 組 2＋1 題目（同一核心拆成兩篇測試，再用一篇承接行動）。",
+      "輸出原則：每個結論都要連回文案或互動數字；建議要指出原句位置與具體方向；先求有，再透過測試逐步優化。",
       "",
       "以下是文案原始資料：",
       postLines||"（目前沒有已保存的文案，請先完成抓取。）"
@@ -100,7 +108,7 @@ ${String(post.text||"（無文字內容）").trim()}`}).join("\n\n");
     promptArea.style.width="100%";promptArea.style.minHeight="260px";promptArea.style.fontFamily="ui-monospace,SFMono-Regular,Menlo,monospace";promptArea.style.fontSize="12px";promptArea.style.lineHeight="1.5";
     copy.addEventListener("click",async()=>{try{if(navigator.clipboard?.writeText)await navigator.clipboard.writeText(promptArea.value);else{promptArea.focus();promptArea.select();document.execCommand("copy")}promptStatus.textContent="AI 提示詞已複製，可以貼到任何 AI 分析。"}catch(error){promptStatus.textContent="瀏覽器未允許自動複製，請點進文字框後手動複製。"}});
     download.addEventListener("click",()=>{const blob=new Blob([promptArea.value],{type:"text/markdown;charset=utf-8"}),url=URL.createObjectURL(blob),link=document.createElement("a"),name=(snapshot.settings?.own_threads_username||"account").replace(/[^A-Za-z0-9._-]/g,"_");link.href=url;link.download=`threads-radar-ai-prompt-${name}.md`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);promptStatus.textContent="AI 提示詞已下載。"});
-    promptActions.append(copy,download);promptPanel.append(el("h2","AI 分析提示詞"),el("p","把目前的貓咪小卡職業、五維與自己的文案整理成一份提示詞，可複製或下載後交給任何 AI。",{className:"muted"}),promptArea,promptActions,promptStatus);root.append(promptPanel);
+    promptActions.append(copy,download);promptPanel.append(el("h2","AI 分析提示詞"),el("p","把自己的文案與互動數字整理成一份專業診斷提示詞，可複製或下載後交給任何 AI。",{className:"muted"}),promptArea,promptActions,promptStatus);root.append(promptPanel);
     const danger=el("section",null,{className:"panel"}),remove=el("button","刪除所有文案",{className:"danger"});
     remove.addEventListener("click",async()=>{if(!confirm("確定刪除所有本機文案？抓取歷史與使用額度會保留。此操作無法復原。"))return;try{remove.disabled=true;await bridge("BRIDGE_DELETE_ALL_POSTS");await load()}catch(error){showError(error.message)}finally{remove.disabled=false}});
     danger.append(el("h2","刪除所有文案"),el("p","只刪除這台 Chrome 的文案與本機分析資料；抓取歷史與使用額度會保留。",{className:"muted"}),remove);root.append(danger);return root
