@@ -61,6 +61,7 @@
     function number(value, digits = 0) { return Number(value || 0).toLocaleString('zh-TW', { maximumFractionDigits: digits }); }
     function showError(message) { $('error').textContent = message; $('error').classList.remove('hidden'); $('status').classList.add('hidden'); }
     function setStatus(message) { $('status').textContent = message; $('status').classList.remove('hidden'); }
+    function transitionNotice(adventure, username) { const type = adventure?.transition || adventure?.lastTransition; if (!type) return null; const key = `threads-radar-adventure:${String(username || 'local').toLowerCase()}:${type}`; try { if (localStorage.getItem(key)) return null; localStorage.setItem(key, '1'); } catch (_error) {} return type === 'second' ? '二轉成功！長期累積讓你的經營風格再次進化。' : '轉職成功！你已蒐集 100 篇 Threads 文案。'; }
     function renderSummary(analysis) {
       const values = [['已蒐集', `${number(analysis.adventure?.collectedPostCount ?? analysis.source.sampleCount)} 篇`], ['分析樣本', `${number(analysis.source.sampleCount)} 篇`], ['戰鬥力', number(analysis.battlePower, 2)], ['卡面', String(analysis.adventure?.cardTier || 'normal').toUpperCase()]];
       $('summary').replaceChildren(...values.map(([label, value]) => { const item = document.createElement('div'); item.className = 'stat'; item.innerHTML = `<span>${label}</span><strong>${value}</strong>`; return item; }));
@@ -80,8 +81,8 @@
         renderSummary(current);
         await drawCard($('card'), current);
         $('result').classList.remove('hidden');
-        if (current.adventure.transition === 'first') setStatus('轉職成功！你已蒐集 100 篇 Threads 文案。');
-        else if (current.adventure.transition === 'second') setStatus('二轉成功！長期累積讓你的經營風格再次進化。');
+        const transition = transitionNotice(current.adventure, current.username);
+        if (transition) setStatus(transition);
         else if (current.adventure.jobStage === 'villager') setStatus(`已蒐集 ${current.adventure.collectedPostCount} 篇；再蒐集 ${Math.max(0, 100 - current.adventure.collectedPostCount)} 篇即可第一次轉職。`);
         else if (current.adventure.jobStage === 'first') setStatus(`一轉完成：${current.profession.label}。再蒐集 ${Math.max(0, 500 - current.adventure.collectedPostCount)} 篇即可二轉。`);
         else setStatus('二轉完成：你的 Threads 經營風格已進化。');
