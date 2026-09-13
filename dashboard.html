@@ -9,6 +9,26 @@
     .cat-card-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:20px}.cat-card-stat{padding:14px;border:1px solid var(--line);border-radius:13px;background:#fff}.cat-card-stat span{display:block;color:var(--muted);font-size:12px}.cat-card-stat strong{display:block;margin-top:3px;font-size:22px;letter-spacing:-.03em}.cat-card-result{display:grid;grid-template-columns:minmax(0,540px) minmax(230px,1fr);gap:22px;align-items:start;margin-top:22px}.cat-card-wrap{padding:15px;border:1px solid var(--line);border-radius:16px;background:#fbfaf6}.cat-card-wrap canvas{display:block;width:100%;height:auto;border-radius:8px;background:#f8f2e7}.cat-card-side{display:grid;gap:14px}.cat-card-side h2{font-size:21px}.cat-card-side p{color:var(--muted);font-size:13px}.cat-card-dimensions{display:grid;gap:9px;margin-top:14px}.cat-card-dimension{display:grid;grid-template-columns:50px minmax(0,1fr) 38px;gap:8px;align-items:center;font-size:13px}.cat-card-bar{height:8px;background:#e8edf5;border-radius:99px;overflow:hidden}.cat-card-bar span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#0a6ee8,#d89a43)}.cat-card-score{text-align:right;font-weight:800}.cat-card-actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:16px}.cat-card-actions button,.cat-card-actions a{display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:10px;padding:10px 13px;background:#fff;color:var(--ink);font:inherit;font-weight:750;text-decoration:none;cursor:pointer}.cat-card-actions .primary{background:var(--blue);border-color:var(--blue);color:#fff}.cat-card-actions button:hover,.cat-card-actions a:hover{border-color:var(--blue);color:var(--blue-dark)}.cat-card-actions .primary:hover{background:var(--blue-dark);color:#fff}.cat-card-footnote{margin-top:14px;color:var(--muted);font-size:12px;line-height:1.6}.cat-card-status{margin-top:18px}.cat-card-loading{text-align:center;padding:45px 20px;color:var(--muted)}
     @media(max-width:900px){.cards{grid-template-columns:1fr 1fr}.grid{grid-template-columns:1fr}.cat-card-result{grid-template-columns:1fr}.cat-card-side{padding:4px 2px 0}}
     @media(max-width:720px){.shell{grid-template-columns:1fr;width:100%;min-height:100vh;margin:0;border:0;border-radius:0}.side{padding:17px;border-right:0;border-bottom:1px solid var(--line)}.local{display:none}.nav{display:flex;overflow:auto;margin-top:15px}.nav button,.nav a{white-space:nowrap}.cards{grid-template-columns:1fr}.form-grid{grid-template-columns:1fr}main{padding:19px}.head{align-items:center}.cat-card-summary{grid-template-columns:repeat(2,1fr);gap:8px}.cat-card-result{gap:14px}.cat-card-wrap{padding:9px}.cat-card-actions button,.cat-card-actions a{flex:1 1 140px}}
+    /* Keep headings and controls readable on narrow screens. Chinese text should
+       wrap at natural line boundaries instead of collapsing into one character
+       per line when a flex/grid child becomes narrow. */
+    .head h1,.head>div:first-child,.post,.post-title,.post-text,.panel{min-width:0}
+    .post-title>span:first-child{min-width:0;word-break:normal;overflow-wrap:break-word}
+    .post-title>.muted{flex:0 0 auto;white-space:nowrap}
+    @media(max-width:720px){
+      .head{display:block}
+      .head-actions{justify-content:flex-start;margin-top:14px}
+      .head-actions button{min-width:0;flex:1 1 auto}
+      .grid{grid-template-columns:1fr}
+      .post-title{display:block;line-height:1.5;word-break:normal}
+      .post-title>.muted{display:block;margin-top:4px;white-space:normal}
+      .post-text{line-break:auto;word-break:normal}
+      .actions{align-items:stretch}
+      .actions>button,.actions>a{min-width:0;flex:1 1 180px}
+      .filters>input,.filters>select{min-width:0;width:100%;flex:1 1 100%}
+      .form input,.form select,.form textarea{min-width:0;width:100%}
+      .panel{padding:17px 15px}
+    }
   </style>
 </head>
 <body>
@@ -74,13 +94,12 @@
   }
   function renderLogs(){const root=el("section",null,{className:"panel"}),table=el("table",null),thead=el("thead"),row=el("tr");["時間","狀態","抓取篇數","新增保存","重複剔除"].forEach(text=>row.append(el("th",text)));thead.append(row);const body=el("tbody"),rows=snapshot.history||[];if(!rows.length){const tr=el("tr"),td=el("td","目前沒有抓取紀錄",{colspan:"5",className:"empty"});tr.append(td);body.append(tr)}else rows.forEach(log=>{const tr=el("tr");[fmt(log.created_at),log.status||"—",log.fetched??log.saved??"—",log.inserted??"—",log.duplicates??log.updated??"—"].forEach(value=>tr.append(el("td",value)));body.append(tr)});table.append(thead,body);root.append(el("h2","抓取執行紀錄"),el("div",null,{className:"table-wrap"}).appendChild(table).parentElement);return root}
   function buildAIPrompt(){
-    const rows=myPosts(),postLines=rows.slice(0,500).map((post,index)=>{const date=post.published_date||post.published_at||post.posted_at||"日期未知",metrics=`讚 ${post.likes??"—"}、留言 ${post.replies??"—"}、轉發 ${post.reposts??"—"}、引用 ${post.quotes??"—"}`;return `### 文案 ${index+1}｜${date}
-${metrics}
-${String(post.text||"（無文字內容）").trim()}`}).join("\n\n");
     return [
-      "現在你是專業的 Threads 文案分析師。請採用 K叔流派：先做判斷，再用文案與互動數字找證據，最後給能執行、能測試的調整。",
+      "現在你是專業的 Threads 文案分析師，請採用 K叔流派工作：先做判斷，再從證據拆解內容任務與轉換路徑，最後提出能執行、能測試的調整。",
+      "請先讀取與本提示詞一同上傳的「脆文雷達 AI 分析資料 JSON」檔案；檔案中的 posts 是唯一可以分析的文案與互動數字來源。不要要求使用者把文案貼在提示詞後面。",
+      "若沒有上傳資料檔，請停止逐篇分析，只回覆「請先上傳脆文雷達 AI 分析資料 JSON 檔案」。",
       "這是一份文案診斷，不是整篇改寫，也不是空泛鼓勵。請保留原文的語氣與段落；除非特別要求，不要輸出完整重寫版本。",
-      "請只根據下方文案與每篇提供的互動數字，不要補寫未提供的背景、受眾規模、曝光、粉絲、收入或平台內部資料。資料不足時請明確寫「資料不足」，不要自行推測。",
+      "請只根據上傳檔案與每篇提供的互動數字，不要補寫未提供的背景、受眾規模、曝光、粉絲、收入或平台內部資料。資料不足時請明確寫「資料不足」，不要自行推測。",
       "請用繁體中文，依照以下順序輸出：",
       "一、決策結論：用 3–5 句說明目前最強的內容優勢、最大的瓶頸，以及最值得先做的一個調整。",
       "二、受眾與內容任務：從文案證據推測正在對誰說、讀者的痛點／渴望／決策問題，以及這批內容想完成的任務；無法判斷的地方標示資料不足。",
@@ -92,11 +111,11 @@ ${String(post.text||"（無文字內容）").trim()}`}).join("\n\n");
       "八、AI 味檢查：找出過度工整、空泛、模板化或不像真人說話的句子，說明判斷依據；不要把自然口語誤判成 AI。",
       "九、優先行動與測試：提出 3 個依優先順序排列的調整，每個都包含「改哪裡／為什麼／如何測試／看什麼結果」；最後提出 3 組 2＋1 題目（同一核心拆成兩篇測試，再用一篇承接行動）。",
       "輸出原則：每個結論都要連回文案或互動數字；建議要指出原句位置與具體方向；先求有，再透過測試逐步優化。",
-      "",
-      "以下是文案原始資料：",
-      postLines||"（目前沒有已保存的文案，請先完成抓取。）"
+      "檔案使用原則：只分析 scope 為 my_account 的自己的 Threads 文案；不可讀取或推測其他帳號內容，也不要捏造不存在的貼文。"
     ].join("\n");
   }
+  function buildAIData(){return{schema_version:1,exported_at:new Date().toISOString(),scope:"my_account",description:"脆文雷達提供給 AI 分析用的自己的 Threads 文案與互動數字。",posts:myPosts().slice(0,500)}}
+  function downloadFile(content,filename,type){const blob=new Blob([content],{type}),url=URL.createObjectURL(blob),link=document.createElement("a");link.href=url;link.download=filename;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
   function renderSettings(){
     const root=document.createDocumentFragment(),exportPanel=el("section",null,{className:"panel"});
     const csv=el("button","下載 CSV"),json=el("button","下載 JSON");
@@ -104,11 +123,12 @@ ${String(post.text||"（無文字內容）").trim()}`}).join("\n\n");
     json.addEventListener("click",()=>bridge("BRIDGE_EXPORT_POSTS",{format:"json",filters:{}}).catch(error=>showError(error.message)));
     const actions=el("div",null,{className:"actions"});actions.append(csv,json);
     exportPanel.append(el("h2","匯出資料"),el("p","下載由擴充功能直接在這台電腦完成。",{className:"muted"}),actions);root.append(exportPanel);
-    const promptPanel=el("section",null,{className:"panel"}),prompt=buildAIPrompt(),promptArea=el("textarea",prompt,{rows:"16",readonly:"",ariaLabel:"可貼到任何 AI 的分析提示詞"}),promptActions=el("div",null,{className:"actions"}),copy=el("button","複製 AI 提示詞",{className:"primary"}),download=el("button","下載 AI 提示詞"),promptStatus=el("p","提示詞會在目前瀏覽器產生；貼到 ChatGPT、Claude 或其他 AI 前，請自行確認內容。",{className:"muted"});
+    const promptPanel=el("section",null,{className:"panel"}),prompt=buildAIPrompt(),promptArea=el("textarea",prompt,{rows:"16",readonly:"",ariaLabel:"可貼到任何 AI 的分析提示詞"}),promptActions=el("div",null,{className:"actions"}),copy=el("button","複製 AI 提示詞",{className:"primary"}),download=el("button","下載 AI 提示詞"),downloadData=el("button","下載 AI 分析資料 JSON"),promptStatus=el("p","提示詞不含原始文案。請先下載提示詞，再下載 AI 分析資料 JSON，將兩個檔案一起上傳給 ChatGPT、Claude 或其他 AI。",{className:"muted"});
     promptArea.style.width="100%";promptArea.style.minHeight="260px";promptArea.style.fontFamily="ui-monospace,SFMono-Regular,Menlo,monospace";promptArea.style.fontSize="12px";promptArea.style.lineHeight="1.5";
     copy.addEventListener("click",async()=>{try{if(navigator.clipboard?.writeText)await navigator.clipboard.writeText(promptArea.value);else{promptArea.focus();promptArea.select();document.execCommand("copy")}promptStatus.textContent="AI 提示詞已複製，可以貼到任何 AI 分析。"}catch(error){promptStatus.textContent="瀏覽器未允許自動複製，請點進文字框後手動複製。"}});
-    download.addEventListener("click",()=>{const blob=new Blob([promptArea.value],{type:"text/markdown;charset=utf-8"}),url=URL.createObjectURL(blob),link=document.createElement("a"),name=(snapshot.settings?.own_threads_username||"account").replace(/[^A-Za-z0-9._-]/g,"_");link.href=url;link.download=`threads-radar-ai-prompt-${name}.md`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);promptStatus.textContent="AI 提示詞已下載。"});
-    promptActions.append(copy,download);promptPanel.append(el("h2","AI 分析提示詞"),el("p","把自己的文案與互動數字整理成一份專業診斷提示詞，可複製或下載後交給任何 AI。",{className:"muted"}),promptArea,promptActions,promptStatus);root.append(promptPanel);
+    download.addEventListener("click",()=>{const name="account";downloadFile(promptArea.value,`threads-radar-ai-prompt-${name}.md`,"text/markdown;charset=utf-8");promptStatus.textContent="AI 提示詞已下載。請再下載 AI 分析資料 JSON 並一起上傳。"});
+    downloadData.addEventListener("click",()=>{downloadFile(JSON.stringify(buildAIData(),null,2),`threads-radar-ai-data-${new Date().toISOString().slice(0,10)}.json`,"application/json;charset=utf-8");promptStatus.textContent="AI 分析資料 JSON 已下載。請與提示詞一起上傳。"});
+    promptActions.append(copy,download,downloadData);promptPanel.append(el("h2","AI 分析提示詞"),el("p","提示詞只提供 K叔流派的分析流程；原始文案與互動數字改放在單獨下載的 JSON 檔案，請把兩個檔案一起交給任何 AI。",{className:"muted"}),promptArea,promptActions,promptStatus);root.append(promptPanel);
     const danger=el("section",null,{className:"panel"}),remove=el("button","刪除所有文案",{className:"danger"});
     remove.addEventListener("click",async()=>{if(!confirm("確定刪除所有本機文案？抓取歷史與使用額度會保留。此操作無法復原。"))return;try{remove.disabled=true;await bridge("BRIDGE_DELETE_ALL_POSTS");await load()}catch(error){showError(error.message)}finally{remove.disabled=false}});
     danger.append(el("h2","刪除所有文案"),el("p","只刪除這台 Chrome 的文案與本機分析資料；抓取歷史與使用額度會保留。",{className:"muted"}),remove);root.append(danger);return root
