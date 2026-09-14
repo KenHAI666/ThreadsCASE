@@ -26,7 +26,7 @@
 
     * { box-sizing: border-box; }
     html { scroll-behavior: smooth; }
-    body { margin: 0; line-height: 1.65; }
+    body { margin: 0; line-height: 1.65; line-break: loose; }
     a { color: inherit; }
     .wrap { width: min(1080px, calc(100% - 32px)); margin: auto; }
     .muted { color: var(--muted); }
@@ -134,12 +134,11 @@
     .section-head { max-width: 720px; margin-bottom: 29px; }
     .section-head p { margin-bottom: 0; font-size: 16px; }
 
-    .steps { display: grid; grid-template-columns: repeat(6, 1fr); gap: 16px; }
-    .card { grid-column: span 2; min-height: 210px; padding: 24px; }
-    .card:nth-child(4), .card:nth-child(5) { grid-column: span 3; }
+    .steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+    .card { min-width: 0; min-height: 210px; padding: 24px; }
     .step-no { display: grid; width: 34px; height: 34px; place-items: center; margin-bottom: 18px; border-radius: 9px; background: var(--blue); color: #fff; font-size: 12px; font-weight: 800; }
-    .card h3 { font-size: 17px; }
-    .card p { margin-bottom: 0; font-size: 14px; }
+    .card h3 { font-size: 17px; line-height: 1.4; text-wrap: balance; }
+    .card p { margin-bottom: 0; font-size: 14px; line-height: 1.65; word-break: normal; overflow-wrap: break-word; }
 
     .plans { background: rgba(234, 243, 255, .46); }
     .table-shell { overflow: auto; }
@@ -192,7 +191,10 @@
       .cat-preview-copy .lead { font-size: 16px; }
       .section { padding: 48px 0; }
       .steps { grid-template-columns: 1fr; }
-      .card, .card:nth-child(4), .card:nth-child(5) { grid-column: auto; min-height: 0; }
+      .card { display: grid; grid-template-columns: 34px minmax(0, 1fr); column-gap: 14px; align-items: start; min-height: 0; padding: 20px; }
+      .step-no { grid-row: span 2; margin-bottom: 0; }
+      .card h3 { margin: 0 0 5px; }
+      .card p { min-width: 0; }
       .split-panel { gap: 24px; padding: 25px; }
       .download-box { flex-direction: column; align-items: flex-start; padding: 32px 26px; }
       .footer-inner { flex-direction: column; }
@@ -202,6 +204,7 @@
     @media (max-width: 380px) {
       .brand { display: none; }
       .nav-links { width: 100%; justify-content: space-between; }
+      .card { padding: 17px; column-gap: 11px; }
     }
 
     @media (prefers-reduced-motion: reduce) {
