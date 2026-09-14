@@ -13,9 +13,9 @@ export const professions = Object.freeze(Object.fromEntries(Object.entries(ADVEN
 }])));
 
 const TIER_META = Object.freeze({
-  normal: { label: 'NORMAL', frame: '#1b2a40', inner: '#5b6774', accent: '#cf9641', paper: '#f8f2e7', sparkle: false },
-  silver: { label: 'SILVER', frame: '#607080', inner: '#b8c2cc', accent: '#94a7b8', paper: '#f2f4f6', sparkle: true },
-  gold: { label: 'GOLD · PRO', frame: '#9b6a12', inner: '#e8b947', accent: '#d89a22', paper: '#fbf2dc', sparkle: true }
+  normal: { label: 'NORMAL', rarity: 'R', frame: '#1b2a40', inner: '#5b6774', accent: '#cf9641', paper: '#f8f2e7', sparkle: false },
+  silver: { label: 'SILVER', rarity: 'SR', frame: '#607080', inner: '#b8c2cc', accent: '#94a7b8', paper: '#f2f4f6', sparkle: true },
+  gold: { label: 'GOLD · PRO', rarity: 'SSR', frame: '#9b6a12', inner: '#e8b947', accent: '#d89a22', paper: '#fbf2dc', sparkle: true }
 });
 const STAGE_LABELS = Object.freeze({ villager: '村民', first: '一轉', second: '二轉' });
 function tierMeta(value) { return TIER_META[normalizeCardTier(value)] || TIER_META.normal; }
@@ -37,12 +37,12 @@ export async function drawCard(canvas, data = {}) {
   const scale = Math.max(904 / art.width, 650 / art.height), sw = 904 / scale, sh = 650 / scale; c.drawImage(art, (art.width - sw) / 2, (art.height - sh) / 2, sw, sh, 88, 92, 904, 650);
   const adventure = data.adventure || {}, stageLabel = STAGE_LABELS[adventure.jobStage] || (p.stage === 'second' ? '二轉' : p.stage === 'first' ? '一轉' : '村民');
   text(stageLabel, 125, 130, 32, '#fffbee', 'left', 3); text(p.label, 125, 180, 40, '#fffbee', 'left', 3); text(`@${data.username || 'threads_adventurer'}`, 940, 617, 24, '#fffbee', 'right', 2, 470);
-  box(820, 76, 190, 52, 20, tier.paper, tier.frame, 3); text(tier.label, 915, 90, 20, tier.frame, 'center', 0, 180);
+  box(820, 76, 190, 52, 20, tier.paper, tier.frame, 3); text(tier.rarity, 915, 90, 24, tier.frame, 'center', 0, 180);
   box(89, 681, 902, 318, 25, '#fffcf6', tier.frame, 3); text('THREADS ADVENTURER', 126, 723, 21, p.color); text('戰鬥力', 126, 774, 35, p.color); text(Number(data.battlePower || 0).toFixed(2), 952, 772, 58, p.color, 'right');
   c.beginPath(); c.moveTo(126, 837); c.lineTo(954, 837); c.strokeStyle = '#d6cdbf'; c.lineWidth = 2; c.stroke();
   (data.dimensions || []).slice(0, 5).forEach((row, i) => { const x = 172 + i * 180, score = Math.max(0, Math.min(100, Number(row.score) || 0)); text(row.label, x, 867, 22, '#1b2a40', 'center'); box(x - 55, 903, 110, 17, 8, '#e8e0d2'); if (score > 0) box(x - 55, 903, 110 * score / 100, 17, Math.min(8, 110 * score / 200), tier.accent); text(String(Math.round(score)), x, 941, 25, '#1b2a40', 'center'); });
   box(89, 1031, 902, 191, 25, p.pale, p.color, 3); text(`${p.label}  ·  ${p.subtitle}`, 126, 1073, 31, p.color); text(p.intro, 126, 1127, 25, '#1b2a40'); text('每一種經營方式，都是一種厲害。', 126, 1177, 23, '#61676b');
-  const collected = Number(adventure.collectedPostCount ?? data.source?.collectedPostCount ?? data.source?.sampleCount ?? 0); text(`已蒐集 ${collected} 篇  ·  ${stageLabel}  ·  ${tier.label}`, 954, 1271, 19, '#61676b', 'right');
+  const collected = Number(adventure.collectedPostCount ?? data.source?.collectedPostCount ?? data.source?.sampleCount ?? 0); text(`已蒐集 ${collected} 篇  ·  ${stageLabel}  ·  ${tier.rarity}`, 954, 1271, 19, '#61676b', 'right');
 }
 
 export { TIER_META, STAGE_LABELS };
