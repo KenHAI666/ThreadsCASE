@@ -6,3 +6,7 @@ node_modules
 dist
 coverage
 *.log
+
+# Google Apps Script / clasp local credentials and project binding
+.clasp.json
+.clasprc.json
