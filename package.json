@@ -1,0 +1,15 @@
+{
+  "name": "threads-radar-ops",
+  "private": true,
+  "scripts": {
+    "gas:login": "clasp login",
+    "gas:pull": "clasp pull",
+    "gas:status": "clasp status",
+    "gas:push": "clasp push",
+    "gas:open": "clasp open-script",
+    "gas:deployments": "clasp list-deployments"
+  },
+  "devDependencies": {
+    "@google/clasp": "3.4.1"
+  }
+}
