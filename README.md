@@ -21,4 +21,4 @@ Threads 文案、留言、分析、監控規則與回覆紀錄保存在使用者
 
 GitHub Pages 請使用 `main` 分支根目錄部署。綁定自有網域後，需同步更新 Chrome 擴充功能的 `externally_connectable` 與主控台可信來源。
 
-貓咪小卡頁面會透過擴充功能 bridge 讀取本機 IndexedDB 的分析資料；它不會從公開伺服器重新抓取 Threads，也不會把原始文案送到這個 Repository。完整操作、分支與部署驗收見 [`docs/FINAL_RELEASE_RUNBOOK.md`](docs/FINAL_RELEASE_RUNBOOK.md)。
+貓咪小卡頁面會透過擴充功能 bridge 讀取本機 IndexedDB 的分析資料；它不會從公開伺服器重新抓取 Threads，也不會把原始文案送到這個 Repository。完整操作、分支與部署驗收見 [`docs/FINAL_RELEASE_RUNBOOK.md`](docs/FINAL_RELEASE_RUNBOOK.md)；Google Sheets／Notion 目的地設定見 [`docs/EXPORT_SETUP.md`](docs/EXPORT_SETUP.md)。
