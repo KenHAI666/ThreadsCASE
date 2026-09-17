@@ -13,9 +13,9 @@ export const professions = Object.freeze(Object.fromEntries(Object.entries(ADVEN
 }])));
 
 const TIER_META = Object.freeze({
-  normal: { label: 'NORMAL', frame: '#1b2a40', inner: '#5b6774', accent: '#cf9641', paper: '#f8f2e7', sparkle: false },
-  silver: { label: 'SILVER', frame: '#607080', inner: '#b8c2cc', accent: '#94a7b8', paper: '#f2f4f6', sparkle: true },
-  gold: { label: 'GOLD · PRO', frame: '#9b6a12', inner: '#e8b947', accent: '#d89a22', paper: '#fbf2dc', sparkle: true }
+  normal: { label: 'NORMAL', rarity: 'R', frame: '#1b2a40', inner: '#5b6774', accent: '#cf9641', paper: '#f8f2e7', sparkle: false },
+  silver: { label: 'SILVER', rarity: 'SR', frame: '#607080', inner: '#b8c2cc', accent: '#94a7b8', paper: '#f2f4f6', sparkle: true },
+  gold: { label: 'GOLD · PRO', rarity: 'SSR', frame: '#9b6a12', inner: '#e8b947', accent: '#d89a22', paper: '#fbf2dc', sparkle: true }
 });
 const STAGE_LABELS = Object.freeze({ villager: '村民', first: '一轉', second: '二轉' });
 function tierMeta(value) { return TIER_META[normalizeCardTier(value)] || TIER_META.normal; }
