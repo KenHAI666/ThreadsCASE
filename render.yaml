@@ -20,7 +20,7 @@ services:
       - key: RPG_PUBLIC_ANALYZE_ENABLED
         value: "false"
       - key: RPG_RELEASE_VERSION
-        value: "1.0.5"
+        value: "1.1.0"
       - key: NOTION_CLIENT_ID
         sync: false
       - key: NOTION_CLIENT_SECRET
