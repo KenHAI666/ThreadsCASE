@@ -1,6 +1,6 @@
 # 脆文雷達 V1 最小上線手冊
 
-更新日期：2026-09-12
+更新日期：2026-09-17
 
 ## 這一版要完成什麼
 
@@ -22,7 +22,7 @@ Threads（使用者已登入的 Chrome）
 | 元件 | V1 角色 | 上線判定 |
 |---|---|---|
 | GitHub Pages | 正式首頁、主控台、貓咪小卡、隱私頁 | 使用者唯一入口 |
-| Chrome 擴充功能 1.0.5 | Threads 滾動抓取、去重、分析、本機資料庫、冒險者轉職與卡面分級 | 必須在已登入 Threads 的 Chrome 測試 |
+| Chrome 擴充功能 1.1.0 | Threads 滾動抓取、去重、分析、本機資料庫、冒險者轉職與卡面分級 | 必須在已登入 Threads 的 Chrome 測試 |
 | GAS | Google 會員識別、方案讀取、用量紀錄預留 | 不接收 Threads 原文 |
 | Render Node | 示範卡面、素材、`/api/health` | 公開抓取端點維持停用 |
 | Portaly | V2 才開啟 | V1 不接入 |
@@ -32,11 +32,18 @@ GAS 或 Render 不能直接讀取 Chrome 的 IndexedDB；「連接擴充功能�
 ## 使用者測試步驟
 
 1. 開啟 [脆文雷達首頁](https://radar.runing9to5.com/)。
-2. 下載並解壓 `dist/threads-radar-extension-v1.0.5-test.zip`，在 `chrome://extensions` 開啟開發人員模式後載入。
+2. 下載並解壓 `dist/threads-radar-extension-v1.1.0-store.zip`，在 `chrome://extensions` 開啟開發人員模式後載入。
 3. 在 Threads 登入自己的帳號，從擴充功能選「我的帳號」並執行抓取。未登入 Google 的本機模式先測 30 篇；登入 Google 後以 Free 測試時確認累積上限 300 篇，VIP 確認累積上限 500 篇，PRO 確認每月上限 500 篇。
 4. 回到 [客戶主控台](https://radar.runing9to5.com/dashboard.html)，按重新整理，確認文案數與最近一次抓取紀錄。
 5. 開啟「貓咪小卡」，確認職業、LV、戰鬥力與五維資料，測試下載 PNG、手機系統分享，以及 Threads 發文入口。
 6. 在 Chrome 開發者工具確認流程沒有把原始文案送到 Render 或 GAS。
+
+## Google Sheets／Notion 匯出設定
+
+1. 在客戶主控台「設定與匯出」輸入 Google Sheet 網址／ID，完成 Google OAuth 後按「連結 Google Sheets」。
+2. 在「我的帳號」選取自己的文案，按 Google Sheets 或 Notion 匯出；只會送出目前選取的資料。
+3. Notion 需先在 Render 設定 `NOTION_CLIENT_ID`、`NOTION_CLIENT_SECRET`、`NOTION_RETURN_URI` 與 `NOTION_PROVIDER_REDIRECT_URI`，並把目標 Database 分享給該 Notion connection。
+4. Google Sheets／Notion 都是使用者主動觸發的額外匯出目的地，不取代 Chrome 本機 IndexedDB。
 
 ## 上線驗收
 
