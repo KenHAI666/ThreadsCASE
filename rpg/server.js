@@ -2,6 +2,7 @@ import http from 'node:http';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { readFile, mkdtemp, rm } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,6 +17,11 @@ const publicAnalyzeEnabled = process.env.RPG_PUBLIC_ANALYZE_ENABLED === 'true';
 const releaseVersion = process.env.RPG_RELEASE_VERSION || '1.0.5';
 const port = Number(process.env.PORT || 8787);
 const host = process.env.HOST || '127.0.0.1';
+const notionClientId = String(process.env.NOTION_CLIENT_ID || '').trim();
+const notionClientSecret = String(process.env.NOTION_CLIENT_SECRET || '').trim();
+const notionReturnUri = String(process.env.NOTION_RETURN_URI || 'https://radar.runing9to5.com/notion-callback.html').trim();
+const notionProviderRedirectUri = String(process.env.NOTION_PROVIDER_REDIRECT_URI || 'https://threads-adventurer.onrender.com/api/notion/oauth/callback').trim();
+const notionTickets = new Map();
 const cache = new Map();
 const inFlight = new Map();
 const rateBuckets = new Map();
@@ -222,6 +228,77 @@ async function serveStatic(pathname, response) {
   }
 }
 
+function notionOAuthConfigured() {
+  return Boolean(notionClientId && notionClientSecret && notionReturnUri && notionProviderRedirectUri);
+}
+
+function notionRedirectAllowed(value) {
+  return String(value || '').trim() === notionReturnUri;
+}
+
+function redirect(response, location) {
+  response.writeHead(302, { location, 'cache-control': 'no-store' });
+  response.end();
+}
+
+async function notionOAuthStart(url, response) {
+  if (!notionOAuthConfigured()) {
+    sendJson(response, 503, { ok: false, error: 'notion_oauth_not_configured', message: 'Notion OAuth 尚未設定；請在 Render 補上 NOTION_CLIENT_ID、NOTION_CLIENT_SECRET、NOTION_RETURN_URI 與 NOTION_PROVIDER_REDIRECT_URI。' });
+    return;
+  }
+  const state = String(url.searchParams.get('state') || '').trim();
+  const requestedRedirect = String(url.searchParams.get('redirect_uri') || '').trim();
+  if (!state || state.length > 200 || !notionRedirectAllowed(requestedRedirect)) {
+    sendJson(response, 400, { ok: false, error: 'invalid_oauth_request', message: 'Notion OAuth 連結參數無效。' });
+    return;
+  }
+  const auth = new URL('https://api.notion.com/v1/oauth/authorize');
+  auth.search = new URLSearchParams({ owner: 'user', client_id: notionClientId, redirect_uri: notionProviderRedirectUri, response_type: 'code', state }).toString();
+  redirect(response, auth.toString());
+}
+
+async function notionOAuthCallback(url, response) {
+  const code = String(url.searchParams.get('code') || '').trim();
+  const state = String(url.searchParams.get('state') || '').trim();
+  const error = String(url.searchParams.get('error') || '').trim();
+  if (error || !code || !state) {
+    redirect(response, notionReturnUri + '?notion_error=' + encodeURIComponent(error || 'missing_code') + '&state=' + encodeURIComponent(state));
+    return;
+  }
+  if (!notionOAuthConfigured()) {
+    redirect(response, notionReturnUri + '?notion_error=not_configured&state=' + encodeURIComponent(state));
+    return;
+  }
+  try {
+    const basic = Buffer.from(notionClientId + ':' + notionClientSecret).toString('base64');
+    const tokenResponse = await fetch('https://api.notion.com/v1/oauth/token', {
+      method: 'POST',
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json', Authorization: 'Basic ' + basic },
+      body: JSON.stringify({ grant_type: 'authorization_code', code, redirect_uri: notionProviderRedirectUri })
+    });
+    if (!tokenResponse.ok) throw new Error('token_' + tokenResponse.status);
+    const token = await tokenResponse.json();
+    const ticket = randomUUID();
+    notionTickets.set(ticket, { ...token, createdAt: Date.now() });
+    redirect(response, notionReturnUri + '?notion_ticket=' + encodeURIComponent(ticket) + '&state=' + encodeURIComponent(state));
+  } catch (caught) {
+    console.error('Notion OAuth callback failed', caught?.message || caught);
+    redirect(response, notionReturnUri + '?notion_error=exchange_failed&state=' + encodeURIComponent(state));
+  }
+}
+
+function notionOAuthTicket(url, response) {
+  const ticket = String(url.searchParams.get('ticket') || '').trim();
+  const entry = notionTickets.get(ticket);
+  if (!entry || Date.now() - entry.createdAt > 10 * 60 * 1000) {
+    notionTickets.delete(ticket);
+    sendJson(response, 404, { ok: false, error: 'ticket_expired', message: 'Notion 授權票券已失效。' });
+    return;
+  }
+  notionTickets.delete(ticket);
+  sendJson(response, 200, { ok: true, access_token: entry.access_token, workspace_name: entry.workspace_name || '', workspace_id: entry.workspace_id || '', owner: entry.owner || null });
+}
+
 const server = http.createServer(async (request, response) => {
   let url;
   try { url = new URL(request.url || '/', 'http://localhost'); }
@@ -250,8 +327,22 @@ const server = http.createServer(async (request, response) => {
       concurrencyLimit,
       publicAnalyzeEnabled,
       activeComputations,
-      queuedComputations: computeQueue.length
+      queuedComputations: computeQueue.length,
+      notionOAuthConfigured: notionOAuthConfigured(),
     });
+    return;
+  }
+
+  if (url.pathname === '/api/notion/oauth/start') {
+    await notionOAuthStart(url, response);
+    return;
+  }
+  if (url.pathname === '/api/notion/oauth/callback') {
+    await notionOAuthCallback(url, response);
+    return;
+  }
+  if (url.pathname === '/api/notion/oauth/ticket') {
+    notionOAuthTicket(url, response);
     return;
   }
 

@@ -21,3 +21,11 @@ services:
         value: "false"
       - key: RPG_RELEASE_VERSION
         value: "1.0.5"
+      - key: NOTION_CLIENT_ID
+        sync: false
+      - key: NOTION_CLIENT_SECRET
+        sync: false
+      - key: NOTION_RETURN_URI
+        value: "https://radar.runing9to5.com/notion-callback.html"
+      - key: NOTION_PROVIDER_REDIRECT_URI
+        value: "https://threads-adventurer.onrender.com/api/notion/oauth/callback"
