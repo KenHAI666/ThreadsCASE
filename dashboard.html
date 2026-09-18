@@ -10,6 +10,7 @@
     .analysis-quota{margin-top:16px}.quota-summary{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}.quota-summary strong{font-size:28px;letter-spacing:-.035em}.quota-summary span{color:var(--muted);font-size:13px}.quota-track{height:14px;margin-top:13px;border-radius:99px;background:#e8edf5;overflow:hidden}.quota-fill{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--blue),#49a078)}.quota-alert{margin:13px 0 0;padding:10px 12px;border-radius:9px;background:#eef7f1;color:#17633d;font-size:13px}.quota-alert-warn{background:#fff3da;color:#684a00}.quota-alert-danger{background:#fff0f0;color:#a01818}.analysis-chart{display:block;width:100%;height:auto;margin-top:16px;overflow:visible}.analysis-chart .axis{stroke:#dfe4eb;stroke-width:1}.analysis-chart .baseline{stroke:#94a0b2;stroke-width:1;stroke-dasharray:5 5}.analysis-chart .line{fill:none;stroke:var(--blue);stroke-width:3;stroke-linejoin:round;stroke-linecap:round}.analysis-chart .dot{fill:#fff;stroke:var(--blue);stroke-width:2}.analysis-chart .scatter-dot{fill:#dcecff;stroke:var(--blue);stroke-width:1.5}.analysis-chart .axis-label{fill:var(--muted);font-size:11px}.composition-stack{display:flex;min-height:18px;margin:20px 0 12px;border-radius:99px;overflow:hidden;background:#e8edf5}.composition-segment{min-width:0;transition:width .2s ease}.composition-legend{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;font-size:13px}.composition-legend div{display:flex;align-items:center;justify-content:space-between;gap:8px}.composition-label{display:inline-flex;align-items:center;gap:6px}.composition-dot{width:8px;height:8px;border-radius:50%;flex:0 0 8px}.analysis-summary{margin-top:16px}.analysis-tabs{display:flex;gap:8px;margin:14px 0}.analysis-tabs button.active{background:var(--blue-soft);border-color:#b7d6fb;color:var(--blue-dark)}.relative-badge{display:inline-block;margin-top:9px;padding:4px 9px;border-radius:99px;background:#eef6ff;color:#0757b8;font-size:12px;font-weight:800}.analysis-top-low .post{padding:13px;margin-top:9px}.analysis-top-low .post-text{max-height:92px;font-size:13px}.analysis-top-low .post-title{font-size:13px}.analysis-top-low .metrics{font-size:12px}.npc-panel{margin-top:20px;padding:21px;border:1px solid #cce2fd;border-radius:16px;background:linear-gradient(135deg,#f7fbff,#eef6ff)}.npc-panel h2{display:inline-block;margin:0 0 4px 8px;vertical-align:middle}.npc-quote{margin:12px 0 0;font-weight:750;color:#17558f}.npc-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:16px}.npc-card{padding:14px;border:1px solid #cce2fd;border-radius:13px;background:rgba(255,255,255,.8)}.npc-card h3{margin:0 0 6px}.npc-card p{margin:0;color:var(--muted);font-size:13px}.npc-card.is-locked p{color:#684a00;font-weight:700}.npc-next{margin:16px 0 0;padding-top:14px;border-top:1px dashed #b7d6fb;color:#4f5660;font-size:13px}
     @media(max-width:900px){.cards{grid-template-columns:1fr 1fr}.grid{grid-template-columns:1fr}.cat-card-result{grid-template-columns:1fr}.cat-card-side{padding:4px 2px 0}.npc-grid{grid-template-columns:1fr}}
     @media(max-width:720px){.shell{grid-template-columns:1fr;width:100%;min-height:100vh;margin:0;border:0;border-radius:0}.side{padding:17px;border-right:0;border-bottom:1px solid var(--line)}.local{display:none}.nav{display:flex;overflow:auto;margin-top:15px}.nav button,.nav a{white-space:nowrap}.cards{grid-template-columns:1fr}.form-grid{grid-template-columns:1fr}main{padding:19px}.head{align-items:center}.cat-card-summary{grid-template-columns:repeat(2,1fr);gap:8px}.cat-card-result{gap:14px}.cat-card-wrap{padding:9px}.cat-card-actions button,.cat-card-actions a{flex:1 1 140px}}
+    .locked-feature{border:1px solid #e4d6b4;background:linear-gradient(135deg,#fffdf7,#fff7e8)}.locked-feature h2{margin-bottom:8px}.locked-feature p{margin:0;color:#725000}.locked-feature .locked-badge{display:inline-block;margin-bottom:10px;border-radius:999px;padding:4px 9px;background:#fff0c9;color:#725000;font-size:12px;font-weight:800}
     /* Keep headings and controls readable on narrow screens. Chinese text should
        wrap at natural line boundaries instead of collapsing into one character
        per line when a flex/grid child becomes narrow. */
@@ -126,6 +127,17 @@
   function decimal(value,digits=1){return Number(value||0).toLocaleString("zh-TW",{minimumFractionDigits:digits,maximumFractionDigits:digits})}
   function multiplier(value){return decimal(value,2)+"x"}
   function relativePerformance(post,baseline){return baseline>0?numericMetric(post,"total_engagement")/baseline:0}
+  function hasAdvancedAnalysis(){
+    const auth=snapshot?.auth||{},license=auth.license||{};
+    if(Object.prototype.hasOwnProperty.call(license,"analysis_advanced_enabled"))return license.analysis_advanced_enabled===true;
+    const plan=String(auth.plan||auth.effectivePlan||auth.effective_plan||license.plan||"").toLowerCase();
+    return Boolean(auth.signed_in&&["vip","pro"].includes(plan));
+  }
+  function renderLockedFeature(title){
+    const panel=el("article",null,{className:"panel locked-feature"});
+    panel.append(el("span","VIP／PRO 專屬",{className:"locked-badge"}),el("h2",title),el("p","這項完整分析目前尚未開放。升級 VIP／PRO 後即可查看。",{className:"locked-note"}));
+    return panel
+  }
   function chartNode(tag,attrs={},text){
     const node=document.createElementNS("http://www.w3.org/2000/svg",tag);
     Object.entries(attrs).forEach(([key,value])=>node.setAttribute(key,String(value)));
@@ -193,7 +205,7 @@
     cards.append(stat("分析了幾篇文案",sample+" 篇"),stat("平常一篇互動",decimal(baseline)),stat("平均一篇互動",decimal(average)),stat("最好一篇是平常幾倍",multiplier(highest)));
     root.append(cards,sample?renderAdventurerInfo(rows):el("p","先完成自己的文案抓取，這裡就會出現你的冒險者情報。",{className:"notice"}),renderV11Quota());
     if(!rows.length){root.append(empty("尚未抓取自己的文章。完成抓取後，這裡會顯示表現趨勢、互動組成、文章長度與 TOP／LOW 文案。"));return root}
-    const firstGrid=el("section",null,{className:"grid"}),secondGrid=el("section",null,{className:"grid"});firstGrid.append(renderV11Trend(rows,baseline),renderV11Interaction(rows));secondGrid.append(renderV11LengthPerformance(rows,baseline),renderV11Summary(rows,baseline));root.append(firstGrid,secondGrid,renderV11TopLow(rows,baseline));return root
+    const advanced=hasAdvancedAnalysis(),firstGrid=el("section",null,{className:"grid"}),secondGrid=el("section",null,{className:"grid"});firstGrid.append(advanced?renderV11Trend(rows,baseline):renderLockedFeature("表現趨勢"),renderV11Interaction(rows));secondGrid.append(advanced?renderV11LengthPerformance(rows,baseline):renderLockedFeature("文章長度 × 表現"),renderV11Summary(rows,baseline));root.append(firstGrid,secondGrid,advanced?renderV11TopLow(rows,baseline):renderLockedFeature("TOP／LOW 選文"));return root
   }
   function renderAnalysis(){
     return renderV11Analysis();
