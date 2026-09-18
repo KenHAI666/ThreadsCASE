@@ -85,7 +85,7 @@
     const selectVisible=()=>{visibleRows.forEach(post=>selected.add(String(post.uid||post.post_id||post.post_url||"")));draw()};
     const clearSelected=()=>{selected.clear();draw()};
     const select=el("button","全選本頁",{type:"button"}),clear=el("button","取消全選",{type:"button"}),copy=el("button","複製文案",{type:"button"}),csv=el("button","CSV",{type:"button"}),json=el("button","JSON",{type:"button"});select.addEventListener("click",selectVisible);clear.addEventListener("click",clearSelected);copy.addEventListener("click",copySelected);csv.addEventListener("click",()=>runLocal("csv"));json.addEventListener("click",()=>runLocal("json"));bulk.append(selectedLabel,select,clear,copy,csv,json,progress,status);
-    query.addEventListener("input",draw);user.addEventListener("change",draw);filters.append(query,user);panel.append(el("h2",`${scopeLabel(scope)}（${rows.length} 篇）`),el("p","選取文案後可複製純文字，或下載 CSV／JSON。複製只帶文案文字；完整數據請使用 CSV／JSON。",{className:"muted"}),filters,bulk,list);draw();root.append(renderNpcOverview(rows),panel);return root
+    query.addEventListener("input",draw);user.addEventListener("change",draw);filters.append(query,user);panel.append(el("h2",`${scopeLabel(scope)}（${rows.length} 篇）`),el("p","選取文案後可複製純文字，或下載 CSV／JSON。複製只帶文案文字；完整數據請使用 CSV／JSON。",{className:"muted"}),filters,bulk,list);draw();root.append(panel);return root
   }
   function myPosts(){return (snapshot.posts||[]).filter(post=>scopeOf(post)==="my_account")}
   function numericMetric(post,key){return Math.max(0,Number(post?.[key])||0)}
@@ -146,7 +146,7 @@
   }
   function renderV11Trend(rows,baseline){
     const panel=el("article",null,{className:"panel"}),points=[...rows].sort((a,b)=>(postDateKey(a)||"").localeCompare(postDateKey(b)||"")).slice(-28);
-    panel.append(el("h2","表現趨勢"),el("p","依發文日期排列；每篇總互動 ÷ 帳號互動中位數。",{className:"muted"}));
+    panel.append(el("h2","表現趨勢"),el("p","看看每篇貼文，表現比平常好還是差。",{className:"muted"}));
     if(!points.length){panel.append(empty("目前沒有可用的文章資料。"));return panel}
     const width=720,height=250,left=44,right=696,top=20,bottom=218,values=points.map(post=>relativePerformance(post,baseline)),max=Math.max(1,...values)*1.1,y=value=>bottom-Math.min(max,value)/max*(bottom-top),x=index=>points.length===1?(left+right)/2:left+index/(points.length-1)*(right-left),svg=chartNode("svg",{class:"analysis-chart",viewBox:"0 0 "+width+" "+height,role:"img","aria-label":"文案相對表現趨勢圖"});
     [0,1,max].filter((value,index,items)=>items.indexOf(value)===index).forEach(value=>{const yy=y(value);svg.append(chartNode("line",{class:value===1?"baseline":"axis",x1:left,y1:yy,x2:right,y2:yy}),chartNode("text",{class:"axis-label",x:4,y:yy+4},multiplier(value)))});
@@ -159,13 +159,13 @@
   function renderV11Interaction(rows){
     const panel=el("article",null,{className:"panel"}),totals={likes:0,replies:0,reposts:0,quotes:0},items=[["likes","讚","#0a6ee8"],["replies","留言","#4b9cff"],["reposts","轉發","#73b5c8"],["quotes","引用","#9c85d6"]];
     rows.forEach(post=>Object.keys(totals).forEach(key=>{totals[key]+=numericMetric(post,key)}));const total=Object.values(totals).reduce((sum,value)=>sum+value,0),stack=el("div",null,{className:"composition-stack"}),legend=el("div",null,{className:"composition-legend"});
-    panel.append(el("h2","互動組成"),el("p","看內容偏按讚、討論，還是傳播。",{className:"muted"}));
+    panel.append(el("h2","互動組成"),el("p","看看大家比較常按讚、留言、轉發，還是引用。",{className:"muted"}));
     items.forEach(([key,label,color])=>{const amount=totals[key],percentage=total?amount/total*100:0,segment=el("span",null,{className:"composition-segment"});segment.style.width=percentage+"%";segment.style.background=color;segment.title=label+" "+amount.toLocaleString("zh-TW")+"（"+Math.round(percentage)+"%）";stack.append(segment);const item=el("div"),name=el("span",null,{className:"composition-label"}),dot=el("i",null,{className:"composition-dot"});dot.style.background=color;name.append(dot,document.createTextNode(label));item.append(name,el("strong",amount.toLocaleString("zh-TW")+" · "+Math.round(percentage)+"%"));legend.append(item)});
     panel.append(stack,legend,el("p","合計互動 "+total.toLocaleString("zh-TW")+"。",{className:"hint"}));return panel
   }
   function renderV11LengthPerformance(rows,baseline){
     const panel=el("article",null,{className:"panel"}),width=720,height=270,left=44,right=696,top=20,bottom=228,maxChars=Math.max(1,...rows.map(postCharacterCount)),values=rows.map(post=>relativePerformance(post,baseline)),maxRelative=Math.max(1,...values)*1.1,x=value=>left+value/maxChars*(right-left),y=value=>bottom-Math.min(maxRelative,value)/maxRelative*(bottom-top),svg=chartNode("svg",{class:"analysis-chart",viewBox:"0 0 "+width+" "+height,role:"img","aria-label":"文章字數與相對表現散點圖"});
-    panel.append(el("h2","文章長度 × 表現"),el("p","每個點代表一篇文案，協助找出適合自己的篇幅。",{className:"muted"}));
+    panel.append(el("h2","文章長度 × 表現"),el("p","看看短文、長文，哪一種比較容易有互動。",{className:"muted"}));
     const baselineY=y(1);svg.append(chartNode("line",{class:"axis",x1:left,y1:bottom,x2:right,y2:bottom}),chartNode("line",{class:"axis",x1:left,y1:top,x2:left,y2:bottom}),chartNode("line",{class:"baseline",x1:left,y1:baselineY,x2:right,y2:baselineY}),chartNode("text",{class:"axis-label",x:4,y:baselineY+4},"1.0x"));
     rows.forEach((post,index)=>{const dot=chartNode("circle",{class:"scatter-dot",cx:x(postCharacterCount(post)),cy:y(values[index]),r:4.5});dot.append(chartNode("title",{},postCharacterCount(post)+" 字｜總互動 "+numericMetric(post,"total_engagement")+"｜相對表現 "+multiplier(values[index])));svg.append(dot)});
     svg.append(chartNode("text",{class:"axis-label",x:left,y:250},"0 字"),chartNode("text",{class:"axis-label",x:right,y:250,"text-anchor":"end"},maxChars+" 字"),chartNode("text",{class:"axis-label",x:right,y:267,"text-anchor":"end"},"文章字數"));
@@ -173,18 +173,17 @@
   }
   function renderV11Summary(rows,baseline){
     const averageLength=rows.length?Math.round(rows.reduce((sum,post)=>sum+postCharacterCount(post),0)/rows.length):0,above=rows.filter(post=>relativePerformance(post,baseline)>=1).length,panel=el("article",null,{className:"panel analysis-summary"});
-    panel.append(el("h2","分析摘要"),el("p","目前平均字數 "+averageLength.toLocaleString("zh-TW")+" 字；1.0x = 互動中位數 "+decimal(baseline)+"。",{className:"muted"}),el("p","有 "+above.toLocaleString("zh-TW")+" 篇文案高於或等於目前基準。V1.1 只描述本機資料，不把互動數稱為曝光率或互動率。",{className:"muted"}));return panel
+    panel.append(el("h2","簡單結論"),el("p","你的貼文平均約 "+averageLength.toLocaleString("zh-TW")+" 字；平常一篇大約有 "+decimal(baseline)+" 次互動。",{className:"muted"}),el("p","共有 "+above.toLocaleString("zh-TW")+" 篇貼文達到或超過平常表現。",{className:"muted"}));return panel
   }
   function renderV11TopLow(rows,baseline){
     const panel=el("section",null,{className:"panel analysis-top-low"}),tabs=el("div",null,{className:"analysis-tabs"}),topButton=el("button","TOP 10",{type:"button",className:"active"}),lowButton=el("button","LOW 10",{type:"button"}),list=el("div");
-    panel.append(el("h2","TOP / LOW 選文"),el("p","用同一個中位數基準，挑出值得複製與重新測試的文章。",{className:"muted"}),tabs,list);tabs.append(topButton,lowButton);
-    const draw=mode=>{const selected=[...rows].sort((a,b)=>mode==="top"?numericMetric(b,"total_engagement")-numericMetric(a,"total_engagement"):numericMetric(a,"total_engagement")-numericMetric(b,"total_engagement")).slice(0,10);topButton.classList.toggle("active",mode==="top");lowButton.classList.toggle("active",mode==="low");list.replaceChildren(...(selected.length?selected.map(post=>{const card=renderPost(post);card.append(el("span","相對表現 "+multiplier(relativePerformance(post,baseline))+" · "+postCharacterCount(post)+" 字",{className:"relative-badge"}));return card}):[empty("尚無資料")]))};
+    panel.append(el("h2","找出好文與待重試的文"),el("p","先看表現最好的文章，再找出值得重新測試的寫法。",{className:"muted"}),tabs,list);tabs.append(topButton,lowButton);
+    const draw=mode=>{const selected=[...rows].sort((a,b)=>mode==="top"?numericMetric(b,"total_engagement")-numericMetric(a,"total_engagement"):numericMetric(a,"total_engagement")-numericMetric(b,"total_engagement")).slice(0,10);topButton.classList.toggle("active",mode==="top");lowButton.classList.toggle("active",mode==="low");list.replaceChildren(...(selected.length?selected.map(post=>{const card=renderPost(post);card.append(el("span","平常的 "+multiplier(relativePerformance(post,baseline))+" · "+postCharacterCount(post)+" 字",{className:"relative-badge"}));return card}):[empty("尚無資料")]))};
     topButton.addEventListener("click",()=>draw("top"));lowButton.addEventListener("click",()=>draw("low"));draw("top");return panel
   }
   function renderV11Analysis(){
     const rows=myPosts(),sample=rows.length,baseline=medianMetric(rows,"total_engagement"),average=rows.length?rows.reduce((sum,post)=>sum+numericMetric(post,"total_engagement"),0)/rows.length:0,highest=Math.max(0,...rows.map(post=>relativePerformance(post,baseline))),root=document.createDocumentFragment(),cards=el("section",null,{className:"cards"});
-    cards.append(stat("分析樣本",sample+" 篇"),stat("互動中位數",decimal(baseline)),stat("平均總互動",decimal(average)),stat("最高相對表現",multiplier(highest)));root.append(cards,renderV11Quota());
-    root.append(el("p",sample?"目前以 "+sample+" 篇自己的本機文案分析；1.0x = 你的互動中位數 "+decimal(baseline)+"。":"完成抓取後，這裡會自動以你的本機文案建立分析。",{className:"notice"}));
+    cards.append(stat("分析了幾篇文案",sample+" 篇"),stat("平常一篇互動",decimal(baseline)),stat("平均一篇互動",decimal(average)),stat("最好一篇是平常幾倍",multiplier(highest)));root.append(cards,renderNpcOverview(rows),renderV11Quota());
     if(!rows.length){root.append(empty("尚未抓取自己的文章。完成抓取後，這裡會顯示互動組成、表現趨勢、文章長度、熱力圖與 TOP／LOW 文案。"));return root}
     const freeGrid=el("section",null,{className:"grid"});freeGrid.append(renderV11Interaction(rows),renderV11Summary(rows,baseline));root.append(freeGrid);
     const advancedGrid=el("section",null,{className:"grid"});advancedGrid.append(lockAdvanced(renderV11Trend(rows,baseline),"表現趨勢"),lockAdvanced(renderV11LengthPerformance(rows,baseline),"文章長度 × 表現"));root.append(advancedGrid,lockAdvanced(renderV11Heatmap(rows,baseline),"最佳星期／時段與熱力圖"),lockAdvanced(renderV11TopLow(rows,baseline),"TOP / LOW 選文"));return root
