@@ -9,7 +9,7 @@ const RADAR_TZ = 'Asia/Taipei';
  * 2. ENTITLEMENTS 是 VIP / PRO 權限來源；有效方案優先級 PRO > VIP > FREE。
  * 3. VIP 只允許 admin 人工授權。
  * 4. PRO 預留 Portaly；目前由 SYSTEM_CONFIG.portaly_enabled 控制，預設 false。
- * 5. USAGE_EVENTS 是用量唯一事件帳本；USAGE_MONTHLY / USAGE_LIFETIME 是可重建彙總。
+ * 5. USAGE_EVENTS 是用量唯一事件帳本；只有「本次新增」會消耗方案額度，重複文章只統計不扣額度；USAGE_MONTHLY / USAGE_LIFETIME 是可重建彙總。
  * 6. 所有會改權限／用量的操作使用 LockService，並寫 AUDIT_LOG。
  *
  * 注意：本檔刻意不宣告 doGet / doPost，避免直接覆蓋既有 Web App 路由。
@@ -62,6 +62,8 @@ function radarV2GetMemberAccess(memberIdOrEmail) {
     keywordWatchLimit: Number(plan['關鍵字追蹤上限'] || 0),
     accountWatchLimit: Number(plan['帳號追蹤上限'] || 0),
     analysisEnabled: radarV2Bool_(plan['分析功能']),
+    analysisBasicEnabled: radarV2Bool_(plan['分析功能']),
+    analysisAdvancedEnabled: radarV2Bool_(plan['分析功能']) && ['vip', 'pro'].includes(entitlement.plan),
     keywordWatchEnabled: radarV2Bool_(plan['關鍵字海巡']),
     accountWatchEnabled: radarV2Bool_(plan['帳號海巡']),
     calculatedAt: radarV2Now_()
@@ -170,10 +172,10 @@ function radarV2RecordUsageEvent(payload) {
     const memberId = String(payload.memberId || '').trim();
     if (!memberId || !radarV2FindMember_(memberId)) throw new Error('MEMBER_NOT_FOUND');
 
-    const used = radarV2NonNegativeInt_(payload.used);
+    const processed = radarV2NonNegativeInt_(payload.used);
     const added = radarV2NonNegativeInt_(payload.added);
     const duplicate = radarV2NonNegativeInt_(payload.duplicate);
-    if (used !== added + duplicate) throw new Error('USAGE_COUNT_MISMATCH');
+    if (processed !== added + duplicate) throw new Error('USAGE_COUNT_MISMATCH');
 
     const eventId = String(payload.eventId || ('usage-' + Utilities.getUuid()));
     const events = radarV2ReadTable_('USAGE_EVENTS');
@@ -187,7 +189,7 @@ function radarV2RecordUsageEvent(payload) {
       '會員編號': memberId,
       '月份': month,
       '用量類型': String(payload.type || 'scrape'),
-      '本次用量': used,
+      '本次用量': added,
       '本次新增': added,
       '本次重複': duplicate,
       '建立時間': now,
@@ -249,7 +251,7 @@ function radarV2ApplyVerifiedPortalyEvent(event) {
     const amount = Number(event.amount || 0);
     const currency = String(event.currency || 'TWD').toUpperCase();
     if (currency !== 'TWD') throw new Error('PORTALY_CURRENCY_MISMATCH');
-    if (amount > 0 && amount !== Number(config.portaly_pro_price_twd || 150)) throw new Error('PORTALY_AMOUNT_MISMATCH');
+    if (amount > 0 && amount !== Number(config.portaly_pro_price_twd || 199)) throw new Error('PORTALY_AMOUNT_MISMATCH');
 
     const eventKey = String(event.eventKey || '').trim();
     if (!eventKey) throw new Error('PORTALY_EVENT_KEY_REQUIRED');
@@ -368,7 +370,7 @@ function radarV2RebuildUsageSummaries_(onlyMemberId) {
     const now = radarV2Now_();
     radarV2UpsertByKeys_('USAGE_LIFETIME', { '會員編號': memberId }, {
       '會員編號': memberId,
-      '抓取篇數': byMember[memberId].used,
+      '抓取篇數': byMember[memberId].added,
       '新增篇數': byMember[memberId].added,
       '重複篇數': byMember[memberId].duplicate,
       '更新時間': now
@@ -379,7 +381,7 @@ function radarV2RebuildUsageSummaries_(onlyMemberId) {
         '用量編號': 'event-' + month + '-' + memberId,
         '會員編號': memberId,
         '月份': month,
-        '抓取篇數': m.used,
+        '抓取篇數': m.added,
         '新增篇數': m.added,
         '重複篇數': m.duplicate,
         '更新時間': now

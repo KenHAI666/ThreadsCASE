@@ -1,6 +1,7 @@
 const ADMIN_EMAIL = "luciferhai666@gmail.com";
 const OPERATOR_SPREADSHEET_ID = "1PMgVFKAtqempy2CZpMW5KEDP9n2kClARdZEzmLJUhw4";
-const RELEASE_VERSION = "2.0.0";
+const RELEASE_VERSION = "1.1.0";
+const BACKEND_VERSION = "2.0.0";
 const MEMBER_STATUS_OPTIONS = ["啟用", "停用", "active", "terminated"];
 
 /**
@@ -26,13 +27,14 @@ function doGet() {
     ok: true,
     service: "Threads Radar Spreadsheet Operator",
     version: RELEASE_VERSION,
+    backend_version: BACKEND_VERSION,
     backend: "entitlement-v2",
     admin: admin,
     spreadsheet_url: database.getUrl(),
     portaly: {
       enabled: Boolean(config.portaly_enabled),
       mode: String(config.portaly_mode || "test"),
-      pro_price_twd: Number(config.portaly_pro_price_twd || 150)
+      pro_price_twd: Number(config.portaly_pro_price_twd || 199)
     },
     message: "V2 已啟用：VIP 由 ENTITLEMENTS 人工授權；PRO 預留 Portaly。"
   });
@@ -76,6 +78,7 @@ function adminV2Status() {
   return {
     ok: missingSheets.length === 0,
     version: RELEASE_VERSION,
+    backendVersion: BACKEND_VERSION,
     admin: admin,
     spreadsheet_url: database.getUrl(),
     missingSheets: missingSheets,
@@ -83,7 +86,7 @@ function adminV2Status() {
       enabled: Boolean(config.portaly_enabled),
       mode: String(config.portaly_mode || "test"),
       allowTestEntitlementWrite: Boolean(config.allow_test_entitlement_write),
-      proPriceTwd: Number(config.portaly_pro_price_twd || 150)
+      proPriceTwd: Number(config.portaly_pro_price_twd || 199)
     }
   };
 }
