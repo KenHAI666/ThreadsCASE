@@ -62,6 +62,8 @@ function radarV2GetMemberAccess(memberIdOrEmail) {
     keywordWatchLimit: Number(plan['關鍵字追蹤上限'] || 0),
     accountWatchLimit: Number(plan['帳號追蹤上限'] || 0),
     analysisEnabled: radarV2Bool_(plan['分析功能']),
+    analysisBasicEnabled: radarV2Bool_(plan['分析功能']),
+    analysisAdvancedEnabled: radarV2Bool_(plan['分析功能']) && ['vip', 'pro'].includes(entitlement.plan),
     keywordWatchEnabled: radarV2Bool_(plan['關鍵字海巡']),
     accountWatchEnabled: radarV2Bool_(plan['帳號海巡']),
     calculatedAt: radarV2Now_()
@@ -249,7 +251,7 @@ function radarV2ApplyVerifiedPortalyEvent(event) {
     const amount = Number(event.amount || 0);
     const currency = String(event.currency || 'TWD').toUpperCase();
     if (currency !== 'TWD') throw new Error('PORTALY_CURRENCY_MISMATCH');
-    if (amount > 0 && amount !== Number(config.portaly_pro_price_twd || 150)) throw new Error('PORTALY_AMOUNT_MISMATCH');
+    if (amount > 0 && amount !== Number(config.portaly_pro_price_twd || 199)) throw new Error('PORTALY_AMOUNT_MISMATCH');
 
     const eventKey = String(event.eventKey || '').trim();
     if (!eventKey) throw new Error('PORTALY_EVENT_KEY_REQUIRED');
@@ -368,7 +370,7 @@ function radarV2RebuildUsageSummaries_(onlyMemberId) {
     const now = radarV2Now_();
     radarV2UpsertByKeys_('USAGE_LIFETIME', { '會員編號': memberId }, {
       '會員編號': memberId,
-      '抓取篇數': byMember[memberId].used,
+      '抓取篇數': byMember[memberId].added,
       '新增篇數': byMember[memberId].added,
       '重複篇數': byMember[memberId].duplicate,
       '更新時間': now
@@ -379,7 +381,7 @@ function radarV2RebuildUsageSummaries_(onlyMemberId) {
         '用量編號': 'event-' + month + '-' + memberId,
         '會員編號': memberId,
         '月份': month,
-        '抓取篇數': m.used,
+        '抓取篇數': m.added,
         '新增篇數': m.added,
         '重複篇數': m.duplicate,
         '更新時間': now
