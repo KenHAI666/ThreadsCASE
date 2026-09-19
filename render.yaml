@@ -4,7 +4,7 @@ services:
     runtime: node
     rootDir: rpg
     plan: free
-    branch: deploy/threads-adventurer
+    branch: main
     healthCheckPath: /api/health
     buildCommand: npm ci
     startCommand: npm run web
