@@ -2,6 +2,28 @@
 
 目標：把目前 Google Apps Script 後台正式納入 `KenHAI666/ThreadsCASE` 版本控制，之後以 GitHub 為程式碼來源，再用 clasp 同步到 Apps Script。
 
+## Threads Radar V1.1.4 用量同步契約
+
+正式抓取用量的來源檔是 `release/v1.0.0/operator-backend/Backend.gs`，不是根目錄舊版 `gas/Code.gs`。新版路線固定為：
+
+```text
+Chrome 擴充功能抓取並整理文章
+        ↓
+送出 batch_id + usage_event_id + 文章唯一識別 Hash
+        ↓
+GAS 驗證會員、格式、批次重試與 USAGE_POST_KEYS 去重
+        ↓
+GAS 寫入 USAGE_POST_KEYS／USAGE_EVENTS／USAGE_MONTHLY／USAGE_LIFETIME
+        ↓
+GAS 成功寫入後回傳最新 license.usage 與本批次 new_count／duplicate_count
+        ↓
+Chrome 擴充功能保存確認結果，GitHub 前台透過 bridge 顯示 GAS 回傳值
+```
+
+新版契約名稱為 `scan_unique_v3`，舊版待同步事件仍以 `scan_unique_v2` 相容處理。V1.1.4 不更動既有 Threads DOM 抓取、IndexedDB 保存、匯出與冒險者核心功能；只新增後台批次用量驗證與確認結果同步。
+
+正式 Apps Script 專案位置：`release/v1.0.0/operator-backend/`。該目錄的 `.clasp.json` 指向正式 Script ID，部署前必須先確認 `clasp pull`／`git diff`，再執行 `clasp push`。
+
 ## 重要安全規則
 
 1. **第一次只能 Pull，不能先 Push。**
