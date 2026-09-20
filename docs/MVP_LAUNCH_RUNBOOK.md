@@ -23,7 +23,7 @@ Threads（使用者已登入的 Chrome）
 | 元件 | V1 角色 | 上線判定 |
 |---|---|---|
 | GitHub Pages | 正式首頁、主控台、貓咪小卡、隱私頁 | 使用者唯一入口 |
-| Chrome 擴充功能 1.1.4 | Threads 滾動抓取、去重、分析、本機資料庫、冒險者轉職與卡面分級；送出批次 Hash | 必須在已登入 Threads 的 Chrome 測試 |
+| Chrome 擴充功能 1.1.5 | Threads 滾動抓取、去重、分析、本機資料庫、冒險者轉職與卡面分級；送出批次 Hash | 必須在已登入 Threads 的 Chrome 測試 |
 | GAS | Google 會員識別、方案讀取、Hash 去重、用量寫入與確認回傳 | 不接收 Threads 原文 |
 | Render Node | 示範卡面、素材、`/api/health` | 公開抓取端點維持停用 |
 | Portaly | V2 才開啟 | V1 不接入 |
@@ -33,7 +33,7 @@ GAS 或 Render 不能直接讀取 Chrome 的 IndexedDB；「連接擴充功能�
 ## 使用者測試步驟
 
 1. 開啟 [脆文雷達首頁](https://radar.runing9to5.com/)。
-2. 安裝 Chrome Web Store 正式版；若要載入本機包，使用 `dist/threads-radar-extension-v1.1.4-store.zip`，在 `chrome://extensions` 開啟開發人員模式後載入解壓縮資料夾。
+2. 安裝 Chrome Web Store 正式版；若要載入本機包，使用 `dist/threads-radar-extension-v1.1.5-store.zip`，在 `chrome://extensions` 開啟開發人員模式後載入解壓縮資料夾。
 3. 在 Threads 登入自己的帳號，從擴充功能選「文案庫」並執行抓取。未登入 Google 的本機模式先測 20 篇；登入 Google 後以 Free 測試時確認累積上限 100 篇，VIP 確認累積上限 500 篇，PRO 確認每月上限 500 篇。
 4. 回到 [客戶主控台](https://radar.runing9to5.com/dashboard.html)，按重新整理，確認文案數與最近一次抓取紀錄。
 5. 開啟「貓咪小卡」，確認職業、LV、戰鬥力與五維資料，測試下載 PNG、手機系統分享，以及 Threads 發文入口。
@@ -57,7 +57,7 @@ GAS 或 Render 不能直接讀取 Chrome 的 IndexedDB；「連接擴充功能�
 
 ### Chrome 擴充功能
 
-- manifest 版本為 1.1.4。
+- manifest 版本為 1.1.5。
 - 只抓使用者自己的 Threads 文章；抓取動作會實際滾動頁面。
 - 文章、分析、規則與小卡資料留在 IndexedDB。
 - V1 不開放關鍵字探索、特定帳號探索、自動回覆或雲端代抓。

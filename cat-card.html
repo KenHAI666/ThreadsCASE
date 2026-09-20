@@ -37,7 +37,7 @@
     import { drawCard, professions } from './rpg/assets/card.js?v=0817811';
     import { analyzeCatPosts } from './rpg/assets/cat-card-analyzer.js';
 
-    const EXTENSION_IDS = ['alkieogigpplbmifheoldfeejnmpkbmn', 'aaaihgbgeagjlblhfmacjokjemeidgnf'].filter(Boolean);
+    const EXTENSION_IDS = ['aaaihgbgeagjlblhfmacjokjemeidgnf', 'alkieogigpplbmifheoldfeejnmpkbmn'].filter(Boolean);
     const $ = (id) => document.getElementById(id);
     const postScope = (post) => ['my_account', 'own'].includes(post.content_scope) || (!post.content_scope && ['profile', 'my_account'].includes(post.source_type)) ? 'my_account' : post.content_scope || 'other';
 

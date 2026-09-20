@@ -381,7 +381,7 @@
     const canvas = document.querySelector('#landing-cat-card');
     const status = document.querySelector('#landing-card-status');
     const localButton = document.querySelector('#load-local-card');
-    const EXTENSION_IDS = ['alkieogigpplbmifheoldfeejnmpkbmn', 'aaaihgbgeagjlblhfmacjokjemeidgnf'].filter(Boolean);
+    const EXTENSION_IDS = ['aaaihgbgeagjlblhfmacjokjemeidgnf', 'alkieogigpplbmifheoldfeejnmpkbmn'].filter(Boolean);
     const bridge = (type, payload = {}) => new Promise((resolve, reject) => {
       if (!globalThis.chrome?.runtime?.sendMessage) {
         reject(new Error('找不到脆文雷達擴充功能'));
