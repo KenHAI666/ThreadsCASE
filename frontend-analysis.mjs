@@ -101,8 +101,10 @@ export function buildFrontendAnalysis(snapshot = {}) {
 
 export function buildAnalysisSyncPayload(snapshot = {}, analysis = buildFrontendAnalysis(snapshot)) {
   const latest = Array.isArray(snapshot.history) ? snapshot.history[0] || {} : {};
+  // 同一批文章再次抓取也要能留下新的抓取摘要；只使用本機紀錄識別碼／時間，絕不帶入文案。
+  const latestRunIdentity = String(latest.scrape_id || latest.created_at || "").trim();
   return {
-    sync_id: `analysis-${analysis.fingerprint}`,
+    sync_id: `analysis-${hash(`${analysis.fingerprint}\u001d${latestRunIdentity}`)}`,
     analysis_version: analysis.version,
     computed_at: analysis.computed_at,
     source_post_count: analysis.source_post_count,
@@ -118,4 +120,3 @@ export function buildAnalysisSyncPayload(snapshot = {}, analysis = buildFrontend
     }
   };
 }
-
