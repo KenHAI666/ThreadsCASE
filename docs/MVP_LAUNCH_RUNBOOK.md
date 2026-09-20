@@ -1,6 +1,6 @@
 # 脆文雷達 V1 最小上線手冊
 
-更新日期：2026-09-17
+更新日期：2026-09-20
 
 ## 這一版要完成什麼
 
@@ -10,6 +10,7 @@ V1 只驗證一條可運作的核心路徑：
 Threads（使用者已登入的 Chrome）
   → Chrome 擴充功能滾動讀取自己的文章
   → IndexedDB 本機保存與分析
+  → GAS 驗證 batch_id／文章 Hash、去重並回傳最新用量
   → GitHub Pages 主控台讀取 extension bridge
   → 產生貓咪小卡
   → PNG 下載／手機系統分享／Threads 發文入口
@@ -22,8 +23,8 @@ Threads（使用者已登入的 Chrome）
 | 元件 | V1 角色 | 上線判定 |
 |---|---|---|
 | GitHub Pages | 正式首頁、主控台、貓咪小卡、隱私頁 | 使用者唯一入口 |
-| Chrome 擴充功能 1.1.0 | Threads 滾動抓取、去重、分析、本機資料庫、冒險者轉職與卡面分級 | 必須在已登入 Threads 的 Chrome 測試 |
-| GAS | Google 會員識別、方案讀取、用量紀錄預留 | 不接收 Threads 原文 |
+| Chrome 擴充功能 1.1.4 | Threads 滾動抓取、去重、分析、本機資料庫、冒險者轉職與卡面分級；送出批次 Hash | 必須在已登入 Threads 的 Chrome 測試 |
+| GAS | Google 會員識別、方案讀取、Hash 去重、用量寫入與確認回傳 | 不接收 Threads 原文 |
 | Render Node | 示範卡面、素材、`/api/health` | 公開抓取端點維持停用 |
 | Portaly | V2 才開啟 | V1 不接入 |
 
@@ -32,18 +33,18 @@ GAS 或 Render 不能直接讀取 Chrome 的 IndexedDB；「連接擴充功能�
 ## 使用者測試步驟
 
 1. 開啟 [脆文雷達首頁](https://radar.runing9to5.com/)。
-2. 下載並解壓 `dist/threads-radar-extension-v1.1.0-store.zip`，在 `chrome://extensions` 開啟開發人員模式後載入。
-3. 在 Threads 登入自己的帳號，從擴充功能選「我的帳號」並執行抓取。未登入 Google 的本機模式先測 20 篇；登入 Google 後以 Free 測試時確認累積上限 100 篇，VIP 確認累積上限 500 篇，PRO 確認每月上限 500 篇。
+2. 安裝 Chrome Web Store 正式版；若要載入本機包，使用 `dist/threads-radar-extension-v1.1.4-store.zip`，在 `chrome://extensions` 開啟開發人員模式後載入解壓縮資料夾。
+3. 在 Threads 登入自己的帳號，從擴充功能選「文案庫」並執行抓取。未登入 Google 的本機模式先測 20 篇；登入 Google 後以 Free 測試時確認累積上限 100 篇，VIP 確認累積上限 500 篇，PRO 確認每月上限 500 篇。
 4. 回到 [客戶主控台](https://radar.runing9to5.com/dashboard.html)，按重新整理，確認文案數與最近一次抓取紀錄。
 5. 開啟「貓咪小卡」，確認職業、LV、戰鬥力與五維資料，測試下載 PNG、手機系統分享，以及 Threads 發文入口。
-6. 在 Chrome 開發者工具確認流程沒有把原始文案送到 Render 或 GAS。
+6. 在 Chrome 開發者工具確認流程只送出 `batch_id`、`usage_event_id`、文章 Hash 與用量欄位；原始文案不送到 Render 或 GAS。
 
-## Google Sheets／Notion 匯出設定
+## 匯出與資料邊界
 
-1. 在客戶主控台「設定與匯出」輸入 Google Sheet 網址／ID，完成 Google OAuth 後按「連結 Google Sheets」。
-2. 在「我的帳號」選取自己的文案，按 Google Sheets 或 Notion 匯出；只會送出目前選取的資料。
-3. Notion 需先在 Render 設定 `NOTION_CLIENT_ID`、`NOTION_CLIENT_SECRET`、`NOTION_RETURN_URI` 與 `NOTION_PROVIDER_REDIRECT_URI`，並把目標 Database 分享給該 Notion connection。
-4. Google Sheets／Notion 都是使用者主動觸發的額外匯出目的地，不取代 Chrome 本機 IndexedDB。
+1. 客戶前台目前只提供自己的文案庫、基本分析、貓咪小卡與本機 CSV／JSON 匯出。
+2. 批次選文只保留「複製文案／CSV／JSON」；複製文案只複製純文字。
+3. Google Sheets、Notion 與 `notion-callback.html` 不屬於目前正式前台流程，也不應出現在商店版擴充功能或客戶主控台。
+4. Threads 原文與分析資料留在目前 Chrome；會員 API 只接收 Google 身分、方案與必要用量事件。
 
 ## 上線驗收
 
@@ -56,7 +57,7 @@ GAS 或 Render 不能直接讀取 Chrome 的 IndexedDB；「連接擴充功能�
 
 ### Chrome 擴充功能
 
-- manifest 版本為 1.0.5。
+- manifest 版本為 1.1.4。
 - 只抓使用者自己的 Threads 文章；抓取動作會實際滾動頁面。
 - 文章、分析、規則與小卡資料留在 IndexedDB。
 - V1 不開放關鍵字探索、特定帳號探索、自動回覆或雲端代抓。
@@ -64,6 +65,8 @@ GAS 或 Render 不能直接讀取 Chrome 的 IndexedDB；「連接擴充功能�
 ### GAS
 
 - `/exec` 健康回應為 `Threads Radar Member API`。
+- 健康回應版本為 `1.3.0`，支援 `scan_unique_v2` 與 `scan_unique_v3`。
+- `scan_unique_v3` 必須完成 `USAGE_POST_KEYS`、`USAGE_EVENTS`、本月與累積帳本寫入後，才回傳前台確認值。
 - 只保存 Email、方案、狀態、到期日、擴充版本與必要用量。
 - 手動 VIP／PRO 操作只在營運後台使用，不放在客戶首頁。
 
@@ -75,8 +78,8 @@ GAS 或 Render 不能直接讀取 Chrome 的 IndexedDB；「連接擴充功能�
 
 ## 目前部署讀回
 
-- GitHub Pages：新版首頁、主控台與小卡已回傳 HTTP 200。
-- Render：健康檢查已回傳 HTTP 200 且公開抓取停用；首頁仍讀到舊版公開帳號畫面，需在 Render Dashboard 手動部署目前 `main`（或 `deploy/threads-adventurer`）最新 commit 後再驗收。
+- GitHub Pages：新版首頁、主控台與小卡已回傳 HTTP 200；主控台包含「文案庫」、NPC 情報站、20 篇未登入體驗與 VIP／PRO 鎖定提示。
+- Render：健康檢查已回傳 HTTP 200 且公開抓取停用；Blueprint 部署來源固定為 `main`，不再依賴已淘汰的 `deploy/threads-adventurer` 分支。
 - GAS：會員 API 版本維持獨立部署；冒險者狀態與文案仍保存在 Chrome，不由 GAS 讀取。
 
 Render 現在不列入使用者主流程；在首頁與主控台測試通過前，不把 Render 網址當成正式入口。
