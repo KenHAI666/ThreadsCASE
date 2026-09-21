@@ -86,15 +86,14 @@ GAS_SCRIPT_ID
 在自己的 Mac Terminal 執行：
 
 ```bash
-cd ThreadsCASE
-npm ci
-npx clasp login
+# 不需要先 npm ci，直接呼叫官方 clasp 套件
+npx @google/clasp@3.4.1 login
 ```
 
 如果 localhost callback 不方便：
 
 ```bash
-npx clasp login --no-localhost
+npx @google/clasp@3.4.1 login --no-localhost
 ```
 
 登入「擁有／可編輯該 Apps Script」的 Google 帳號。
