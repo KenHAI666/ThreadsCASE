@@ -2,6 +2,7 @@ const RADAR_DB_ID = '1PMgVFKAtqempy2CZpMW5KEDP9n2kClARdZEzmLJUhw4';
 // 營運後台 Sheet：會員方案、人工額度調整、個人 override 的優先來源。
 const RADAR_OPERATOR_DB_ID = '11WOJPBBByb-HgtW9-7Naphe3y3X_XkC45yWRJ8sxBo4';
 const RADAR_TZ = 'Asia/Taipei';
+// CI sync marker: GitHub Actions → clasp
 
 /**
  * Threads 文案雷達－營運後台 V2
