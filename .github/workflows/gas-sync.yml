@@ -2,6 +2,15 @@ name: Sync GAS to Apps Script
 
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "執行模式"
+        required: true
+        default: "sync"
+        type: choice
+        options:
+          - sync
+          - bootstrap
   push:
     branches:
       - main
@@ -9,7 +18,7 @@ on:
       - "gas/**"
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: threads-radar-gas-sync
@@ -17,13 +26,15 @@ concurrency:
 
 jobs:
   sync:
-    name: clasp push
+    name: clasp sync
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: main
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -49,50 +60,114 @@ jobs:
           CLASP_AUTH_JSON: ${{ secrets.CLASP_AUTH_JSON }}
         run: |
           set -euo pipefail
-          if [ -z "${GAS_SCRIPT_ID}" ]; then
-            echo "::error::Missing repository secret GAS_SCRIPT_ID"
-            exit 1
-          fi
-          if [ -z "${CLASP_AUTH_JSON}" ]; then
-            echo "::error::Missing repository secret CLASP_AUTH_JSON"
-            exit 1
-          fi
+          test -n "${GAS_SCRIPT_ID}" || { echo "::error::Missing repository secret GAS_SCRIPT_ID"; exit 1; }
+          test -n "${CLASP_AUTH_JSON}" || { echo "::error::Missing repository secret CLASP_AUTH_JSON"; exit 1; }
 
       - name: Configure clasp authentication
         shell: bash
         env:
+          GAS_SCRIPT_ID: ${{ secrets.GAS_SCRIPT_ID }}
           CLASP_AUTH_JSON: ${{ secrets.CLASP_AUTH_JSON }}
         run: |
           set -euo pipefail
           printf '%s' "${CLASP_AUTH_JSON}" > "${HOME}/.clasprc.json"
           chmod 600 "${HOME}/.clasprc.json"
-
-      - name: Create local clasp project binding
-        shell: bash
-        env:
-          GAS_SCRIPT_ID: ${{ secrets.GAS_SCRIPT_ID }}
-        run: |
-          set -euo pipefail
-          jq -n --arg scriptId "${GAS_SCRIPT_ID}"             '{scriptId: $scriptId, rootDir: "gas"}' > .clasp.json
+          jq -n --arg scriptId "${GAS_SCRIPT_ID}" '{scriptId: $scriptId, rootDir: "gas"}' > .clasp.json
 
       - name: Verify authorized clasp account
         run: npx clasp show-authorized-user --json
 
-      - name: Protect remote-only Apps Script files
+      - name: Clone remote Apps Script
         shell: bash
         env:
           GAS_SCRIPT_ID: ${{ secrets.GAS_SCRIPT_ID }}
         run: |
           set -euo pipefail
-
           CLASP_BIN="${GITHUB_WORKSPACE}/node_modules/.bin/clasp"
           REMOTE_DIR="${RUNNER_TEMP}/gas-remote"
+          rm -rf "${REMOTE_DIR}"
           mkdir -p "${REMOTE_DIR}"
-
           (
             cd "${REMOTE_DIR}"
             "${CLASP_BIN}" clone-script "${GAS_SCRIPT_ID}" --rootDir .
           )
+          echo "REMOTE_DIR=${REMOTE_DIR}" >> "${GITHUB_ENV}"
+
+      - name: Bootstrap remote-only files into GitHub
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'bootstrap'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          find gas -type f \
+            \( -name '*.js' -o -name '*.gs' -o -name '*.html' -o -name 'appsscript.json' \) \
+            -printf '%P\n' \
+            | sed -E 's/\.gs$/.js/' \
+            | sort -u > "${RUNNER_TEMP}/local-before.txt"
+
+          find "${REMOTE_DIR}" -type f \
+            \( -name '*.js' -o -name '*.gs' -o -name '*.html' -o -name 'appsscript.json' \) \
+            -printf '%P\n' \
+            | sed -E 's/\.gs$/.js/' \
+            | sort -u > "${RUNNER_TEMP}/remote.txt"
+
+          REMOTE_ONLY="$(comm -13 "${RUNNER_TEMP}/local-before.txt" "${RUNNER_TEMP}/remote.txt" || true)"
+
+          if [ -z "${REMOTE_ONLY}" ]; then
+            echo "No remote-only Apps Script files found."
+          else
+            echo "Importing remote-only Apps Script files:"
+            echo "${REMOTE_ONLY}"
+
+            while IFS= read -r normalized; do
+              [ -n "${normalized}" ] || continue
+
+              src="${REMOTE_DIR}/${normalized}"
+              if [ ! -f "${src}" ] && [[ "${normalized}" == *.js ]]; then
+                alt="${REMOTE_DIR}/${normalized%.js}.gs"
+                if [ -f "${alt}" ]; then
+                  src="${alt}"
+                fi
+              fi
+
+              if [ ! -f "${src}" ]; then
+                echo "::error::Could not locate remote file for ${normalized}"
+                exit 1
+              fi
+
+              dest="gas/${normalized}"
+              if [ -e "${dest}" ]; then
+                echo "::error::Refusing to overwrite existing GitHub file ${dest}"
+                exit 1
+              fi
+
+              mkdir -p "$(dirname "${dest}")"
+              cp "${src}" "${dest}"
+              echo "Imported ${dest}"
+            done <<< "${REMOTE_ONLY}"
+          fi
+
+          jq empty gas/appsscript.json
+          for file in gas/*.js; do
+            [ -e "${file}" ] || continue
+            node --check "${file}"
+          done
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add gas/
+
+          if git diff --cached --quiet; then
+            echo "No bootstrap files to commit."
+          else
+            git commit -m "Bootstrap remote Apps Script files into gas"
+            git push origin HEAD:main
+          fi
+
+      - name: Protect remote-only Apps Script files
+        shell: bash
+        run: |
+          set -euo pipefail
 
           find gas -type f \
             \( -name '*.js' -o -name '*.gs' -o -name '*.html' -o -name 'appsscript.json' \) \
@@ -116,7 +191,7 @@ jobs:
           if [ -n "${REMOTE_ONLY}" ]; then
             echo "::error::Remote Apps Script contains files that are not tracked in gas/. clasp push would delete them."
             echo "${REMOTE_ONLY}"
-            echo "Pull/copy these files into gas/ before enabling automatic sync."
+            echo "Run this workflow manually with mode=bootstrap."
             exit 1
           fi
 
@@ -129,4 +204,4 @@ jobs:
       - name: Sync complete
         run: |
           echo "GitHub gas/** has been synced to Apps Script."
-          echo "This workflow does NOT create/redeploy the production Web App deployment."
+          echo "This workflow does NOT redeploy the production Web App."
