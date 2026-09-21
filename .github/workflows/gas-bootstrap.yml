@@ -1,0 +1,168 @@
+name: Bootstrap GAS from Apps Script
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: threads-radar-gas-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  bootstrap:
+    name: Pull remote-only files, commit, then push
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate required secrets
+        shell: bash
+        env:
+          GAS_SCRIPT_ID: ${{ secrets.GAS_SCRIPT_ID }}
+          CLASP_AUTH_JSON: ${{ secrets.CLASP_AUTH_JSON }}
+        run: |
+          set -euo pipefail
+          test -n "${GAS_SCRIPT_ID}" || { echo "::error::Missing GAS_SCRIPT_ID"; exit 1; }
+          test -n "${CLASP_AUTH_JSON}" || { echo "::error::Missing CLASP_AUTH_JSON"; exit 1; }
+
+      - name: Configure clasp
+        shell: bash
+        env:
+          GAS_SCRIPT_ID: ${{ secrets.GAS_SCRIPT_ID }}
+          CLASP_AUTH_JSON: ${{ secrets.CLASP_AUTH_JSON }}
+        run: |
+          set -euo pipefail
+          printf '%s' "${CLASP_AUTH_JSON}" > "${HOME}/.clasprc.json"
+          chmod 600 "${HOME}/.clasprc.json"
+          jq -n --arg scriptId "${GAS_SCRIPT_ID}"             '{scriptId: $scriptId, rootDir: "gas"}' > .clasp.json
+
+      - name: Clone remote Apps Script
+        shell: bash
+        env:
+          GAS_SCRIPT_ID: ${{ secrets.GAS_SCRIPT_ID }}
+        run: |
+          set -euo pipefail
+          CLASP_BIN="${GITHUB_WORKSPACE}/node_modules/.bin/clasp"
+          REMOTE_DIR="${RUNNER_TEMP}/gas-remote"
+          rm -rf "${REMOTE_DIR}"
+          mkdir -p "${REMOTE_DIR}"
+          (
+            cd "${REMOTE_DIR}"
+            "${CLASP_BIN}" clone-script "${GAS_SCRIPT_ID}" --rootDir .
+          )
+          echo "REMOTE_DIR=${REMOTE_DIR}" >> "${GITHUB_ENV}"
+
+      - name: Import remote-only files into gas/
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          normalize_list() {
+            find "$1" -type f               \( -name '*.js' -o -name '*.gs' -o -name '*.html' -o -name 'appsscript.json' \)               -printf '%P\n'               | sed -E 's/\.gs$/.js/'               | sort -u
+          }
+
+          normalize_list gas > "${RUNNER_TEMP}/local-before.txt"
+          normalize_list "${REMOTE_DIR}" > "${RUNNER_TEMP}/remote.txt"
+
+          REMOTE_ONLY="$(comm -13 "${RUNNER_TEMP}/local-before.txt" "${RUNNER_TEMP}/remote.txt" || true)"
+
+          if [ -z "${REMOTE_ONLY}" ]; then
+            echo "No remote-only files found."
+          else
+            echo "Importing these remote-only files:"
+            echo "${REMOTE_ONLY}"
+
+            while IFS= read -r normalized; do
+              [ -n "${normalized}" ] || continue
+
+              src="${REMOTE_DIR}/${normalized}"
+              if [ ! -f "${src}" ] && [[ "${normalized}" == *.js ]]; then
+                alt="${REMOTE_DIR}/${normalized%.js}.gs"
+                if [ -f "${alt}" ]; then
+                  src="${alt}"
+                fi
+              fi
+
+              if [ ! -f "${src}" ]; then
+                echo "::error::Could not locate remote file for ${normalized}"
+                exit 1
+              fi
+
+              dest="gas/${normalized}"
+              mkdir -p "$(dirname "${dest}")"
+
+              if [ -e "${dest}" ]; then
+                echo "::error::Refusing to overwrite existing tracked file ${dest}"
+                exit 1
+              fi
+
+              cp "${src}" "${dest}"
+              echo "Imported ${dest}"
+            done <<< "${REMOTE_ONLY}"
+          fi
+
+      - name: Validate merged GAS project
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq empty gas/appsscript.json
+          for f in gas/*.js; do
+            [ -e "$f" ] || continue
+            node --check "$f"
+          done
+
+      - name: Verify no remote-only files remain
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          find gas -type f             \( -name '*.js' -o -name '*.gs' -o -name '*.html' -o -name 'appsscript.json' \)             -printf '%P\n'             | sed -E 's/\.gs$/.js/'             | sort -u > "${RUNNER_TEMP}/local-after.txt"
+
+          find "${REMOTE_DIR}" -type f             \( -name '*.js' -o -name '*.gs' -o -name '*.html' -o -name 'appsscript.json' \)             -printf '%P\n'             | sed -E 's/\.gs$/.js/'             | sort -u > "${RUNNER_TEMP}/remote-after.txt"
+
+          REMOTE_ONLY="$(comm -13 "${RUNNER_TEMP}/local-after.txt" "${RUNNER_TEMP}/remote-after.txt" || true)"
+          if [ -n "${REMOTE_ONLY}" ]; then
+            echo "::error::Remote-only files still remain:"
+            echo "${REMOTE_ONLY}"
+            exit 1
+          fi
+
+      - name: Commit imported GAS files to GitHub
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add gas/
+
+          if git diff --cached --quiet; then
+            echo "No new GAS files to commit."
+          else
+            git commit -m "Bootstrap remote Apps Script files into gas"
+            git push origin HEAD:main
+          fi
+
+      - name: Push merged GitHub GAS source to Apps Script
+        run: npx clasp push --force
+
+      - name: Bootstrap complete
+        run: |
+          echo "Remote-only Apps Script files are now tracked in gas/."
+          echo "GitHub gas/** has been pushed back to Apps Script."
+          echo "Normal Sync GAS to Apps Script workflow can now be used."
