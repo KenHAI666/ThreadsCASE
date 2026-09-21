@@ -165,7 +165,7 @@ function planForMember_(member) {
   const rows = rowsAsObjects_(sheet_("PLAN_LIMITS"));
   const row = rows.find(value => String(value.plan).toLowerCase() === planKey) || rows.find(value => String(value.plan).toLowerCase() === "free");
   if (!row) throw new Error("PLAN_LIMITS 尚未設定 Free 方案");
-  return normalizePlan_(row);
+  return applyMemberQuotaOverrides_(row, member);
 }
 
 function usageStateForUser_(user, member) {
@@ -179,20 +179,31 @@ function usageStateForUser_(user, member) {
 
 function usageStateForTotals_(member, plan, lifetimeTotal, periodTotal) {
   const quota = quotaSnapshot_(plan, lifetimeTotal, periodTotal);
-  const lifetimeLimit = plan.quota_mode === "lifetime" ? plan.lifetime_limit : 0;
-  const monthlyLimit = plan.quota_mode === "monthly" ? plan.monthly_limit : 0;
-  const localLibraryLimit = plan.plan === "free" ? 100 : 500;
+  const lifetimeLimit = quota.mode === "lifetime" ? quota.limit : 0;
+  const monthlyLimit = quota.mode === "monthly" ? quota.limit : 0;
+  const defaultLibraryLimit = plan.plan === "free" ? 100 : 500;
+  const localLibraryLimit = quota.limit > 0 ? Math.max(defaultLibraryLimit, quota.limit) : defaultLibraryLimit;
+  const keywordLimit = plan.keyword_limit_override !== null && plan.keyword_limit_override !== undefined
+    ? plan.keyword_limit_override
+    : Math.max(0, Number(plan.keyword_limit) || 0);
+
+  const effectiveLifetimeUsed = quota.mode === "lifetime" ? quota.used : quota.lifetime_used;
+  const effectivePeriodUsed = quota.mode === "monthly" ? quota.used : quota.period_used;
+
   const usage = {
     period: currentPeriod_(),
     lifetime_used: quota.lifetime_used,
     period_used: quota.period_used,
+    raw_used: quota.raw_used,
+    usage_adjustment: quota.usage_adjustment,
     used: quota.used,
     limit: quota.limit,
     remaining: quota.limit > 0 ? quota.remaining : null,
-    lifetime_new_scraped_posts: quota.lifetime_used,
-    new_scraped_posts: quota.period_used,
-    scraped_posts: quota.period_used
+    lifetime_new_scraped_posts: effectiveLifetimeUsed,
+    new_scraped_posts: effectivePeriodUsed,
+    scraped_posts: effectivePeriodUsed
   };
+
   return {
     license: {
       plan: plan.plan,
@@ -205,6 +216,7 @@ function usageStateForTotals_(member, plan, lifetimeTotal, periodTotal) {
       library_limit: localLibraryLimit,
       max_scrapes_lifetime: lifetimeLimit,
       max_scrapes_per_month: monthlyLimit,
+      keyword_limit: keywordLimit,
       usage
     },
     usage
