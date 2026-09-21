@@ -102,7 +102,8 @@ function adminDashboardSnapshot_(admin) {
   const memberRows = members.map(row => {
     const userId = String(row.user_id || "");
     const planKey = String(row.plan || "free").toLowerCase();
-    const plan = plans.get(planKey) || plans.get("free") || normalizePlan_(TR_DEFAULT_PLANS[0]);
+    const basePlan = plans.get(planKey) || plans.get("free") || normalizePlan_(TR_DEFAULT_PLANS[0]);
+    const plan = applyMemberQuotaOverrides_(basePlan, row);
     const usage = usageByUser.get(userId) || { lifetime: 0, period: 0 };
     const quota = quotaSnapshot_(plan, usage.lifetime, usage.period);
     const latest = latestBatchByUser.get(userId);
