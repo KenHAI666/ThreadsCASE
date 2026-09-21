@@ -1,4 +1,6 @@
 const RADAR_DB_ID = '1PMgVFKAtqempy2CZpMW5KEDP9n2kClARdZEzmLJUhw4';
+// 營運後台 Sheet：會員方案、人工額度調整、個人 override 的優先來源。
+const RADAR_OPERATOR_DB_ID = '11WOJPBBByb-HgtW9-7Naphe3y3X_XkC45yWRJ8sxBo4';
 const RADAR_TZ = 'Asia/Taipei';
 
 /**
@@ -36,6 +38,11 @@ function radarV2GetEffectivePlan(memberIdOrEmail) {
 }
 
 function radarV2GetMemberAccess(memberIdOrEmail) {
+  // 目前營運決策：Google Sheet 是會員／額度 Source of Truth。
+  // 優先讀新版營運資料庫；若尚未有該會員，再 fallback 舊 V2 entitlement 架構。
+  const operatorAccess = radarV2GetOperatorSheetAccess_(memberIdOrEmail);
+  if (operatorAccess) return operatorAccess;
+
   const member = radarV2FindMember_(memberIdOrEmail);
   if (!member) throw new Error('MEMBER_NOT_FOUND');
 
@@ -57,9 +64,12 @@ function radarV2GetMemberAccess(memberIdOrEmail) {
     entitlementEndAt: entitlement.endAt || '',
     usageLifetime: usage.lifetime,
     usageMonthly: usage.monthly,
+    used: used,
     limit: limit,
+    scrapeLimit: limit,
     remaining: limit > 0 ? Math.max(0, limit - used) : null,
     keywordWatchLimit: Number(plan['關鍵字追蹤上限'] || 0),
+    keywordLimit: Number(plan['關鍵字追蹤上限'] || 0),
     accountWatchLimit: Number(plan['帳號追蹤上限'] || 0),
     analysisEnabled: radarV2Bool_(plan['分析功能']),
     analysisBasicEnabled: radarV2Bool_(plan['分析功能']),
@@ -68,6 +78,226 @@ function radarV2GetMemberAccess(memberIdOrEmail) {
     accountWatchEnabled: radarV2Bool_(plan['帳號海巡']),
     calculatedAt: radarV2Now_()
   };
+}
+
+/**
+ * 新版營運資料庫讀取層。
+ *
+ * MEMBERS 主要欄位：
+ * user_id / email / plan / status
+ * usage_adjustment / scrape_limit_override / keyword_limit_override
+ * usage_effective / effective_scrape_limit / effective_keyword_limit / remaining_scrape
+ *
+ * PLAN_LIMITS 主要欄位：
+ * plan / quota_mode / lifetime_limit / monthly_limit / keyword_limit / ...
+ *
+ * 重要：
+ * - 個人 override 優先於方案預設。
+ * - usage_effective 已包含 usage_adjustment。
+ * - 不把 usage_adjustment / internal_tag / note 回傳給 Extension。
+ */
+function radarV2GetOperatorSheetAccess_(memberIdOrEmail) {
+  const key = String(memberIdOrEmail || '').trim().toLowerCase();
+  if (!key) return null;
+
+  let db;
+  try {
+    db = SpreadsheetApp.openById(RADAR_OPERATOR_DB_ID);
+  } catch (error) {
+    return null;
+  }
+
+  const membersSheet = db.getSheetByName('MEMBERS');
+  const plansSheet = db.getSheetByName('PLAN_LIMITS');
+  if (!membersSheet || !plansSheet) return null;
+
+  const memberValues = membersSheet.getDataRange().getValues();
+  if (memberValues.length < 2) return null;
+
+  const memberMap = radarV2HeaderMap_(memberValues[0]);
+  const userIdCol = radarV2HeaderIndexByAliases_(memberMap, ['user_id', '會員編號']);
+  const emailCol = radarV2HeaderIndexByAliases_(memberMap, ['email', '電子郵件']);
+  if (userIdCol < 0 && emailCol < 0) return null;
+
+  const memberRow = memberValues.slice(1).find(row => {
+    const userId = userIdCol >= 0 ? String(row[userIdCol] || '').trim().toLowerCase() : '';
+    const email = emailCol >= 0 ? String(row[emailCol] || '').trim().toLowerCase() : '';
+    return userId === key || email === key;
+  });
+  if (!memberRow) return null;
+
+  const memberId = radarV2RowValueByAliases_(memberRow, memberMap, ['user_id', '會員編號']);
+  const email = radarV2RowValueByAliases_(memberRow, memberMap, ['email', '電子郵件']);
+  const status = String(radarV2RowValueByAliases_(memberRow, memberMap, ['status', '狀態']) || 'active').trim().toLowerCase();
+  const planCode = String(radarV2RowValueByAliases_(memberRow, memberMap, ['plan', '方案']) || 'free').trim().toLowerCase();
+
+  const planValues = plansSheet.getDataRange().getValues();
+  if (planValues.length < 2) throw new Error('PLAN_LIMITS_EMPTY');
+  const planMap = radarV2HeaderMap_(planValues[0]);
+  const planCol = radarV2HeaderIndexByAliases_(planMap, ['plan', '方案']);
+  const planRow = planValues.slice(1).find(row =>
+    planCol >= 0 && String(row[planCol] || '').trim().toLowerCase() === planCode
+  );
+  if (!planRow) throw new Error('PLAN_NOT_FOUND:' + planCode);
+
+  const quotaMode = String(
+    radarV2RowValueByAliases_(planRow, planMap, ['quota_mode', '額度模式']) || 'lifetime'
+  ).trim().toLowerCase();
+
+  const defaultLimit = quotaMode === 'monthly'
+    ? radarV2Number_(radarV2RowValueByAliases_(planRow, planMap, ['monthly_limit', '每月抓取上限']), 0)
+    : radarV2Number_(radarV2RowValueByAliases_(planRow, planMap, ['lifetime_limit', '累積抓取上限']), 0);
+
+  const rawOverride = radarV2RowValueByAliases_(memberRow, memberMap, ['scrape_limit_override', '特殊抓取上限']);
+  const overrideLimit = radarV2OptionalPositiveNumber_(rawOverride);
+  const calculatedLimit = overrideLimit !== null ? overrideLimit : defaultLimit;
+
+  const effectiveLimitCell = radarV2OptionalNonNegativeNumber_(
+    radarV2RowValueByAliases_(memberRow, memberMap, ['effective_scrape_limit', '最終抓取上限'])
+  );
+  const limit = effectiveLimitCell !== null ? effectiveLimitCell : calculatedLimit;
+
+  let used = radarV2OptionalNonNegativeNumber_(
+    radarV2RowValueByAliases_(memberRow, memberMap, ['usage_effective', '有效使用量'])
+  );
+
+  if (used === null) {
+    used = radarV2GetOperatorUsageFallback_(db, memberId, email, quotaMode);
+    const adjustment = radarV2Number_(
+      radarV2RowValueByAliases_(memberRow, memberMap, ['usage_adjustment', '人工額度調整']),
+      0
+    );
+    used = Math.max(0, used + adjustment);
+  }
+
+  const rawKeywordOverride = radarV2RowValueByAliases_(memberRow, memberMap, ['keyword_limit_override', '特殊關鍵字上限']);
+  const keywordOverride = radarV2OptionalPositiveNumber_(rawKeywordOverride);
+  const planKeywordLimit = radarV2Number_(
+    radarV2RowValueByAliases_(planRow, planMap, ['keyword_limit', '關鍵字追蹤上限']),
+    0
+  );
+  const effectiveKeywordCell = radarV2OptionalNonNegativeNumber_(
+    radarV2RowValueByAliases_(memberRow, memberMap, ['effective_keyword_limit', '最終關鍵字上限'])
+  );
+  const keywordLimit = effectiveKeywordCell !== null
+    ? effectiveKeywordCell
+    : (keywordOverride !== null ? keywordOverride : planKeywordLimit);
+
+  const remainingCell = radarV2OptionalNonNegativeNumber_(
+    radarV2RowValueByAliases_(memberRow, memberMap, ['remaining_scrape', '剩餘抓取量'])
+  );
+  const remaining = remainingCell !== null
+    ? remainingCell
+    : Math.max(0, limit - used);
+
+  const accountWatchLimit = radarV2Number_(
+    radarV2RowValueByAliases_(planRow, planMap, ['account_watch_limit', '帳號追蹤上限']),
+    0
+  );
+
+  const analysisBasic = radarV2Bool_(
+    radarV2RowValueByAliases_(planRow, planMap, ['analysis_basic', '基本分析', '分析功能'])
+  );
+  const analysisAdvanced = radarV2Bool_(
+    radarV2RowValueByAliases_(planRow, planMap, ['analysis_advanced', '進階分析'])
+  );
+  const keywordScout = radarV2Bool_(
+    radarV2RowValueByAliases_(planRow, planMap, ['keyword_scout', '關鍵字海巡'])
+  );
+  const accountWatch = radarV2Bool_(
+    radarV2RowValueByAliases_(planRow, planMap, ['account_watch', '帳號海巡'])
+  );
+
+  return {
+    memberId: String(memberId || ''),
+    email: String(email || ''),
+    memberStatus: status,
+    effectivePlan: planCode,
+    entitlementSource: 'operator_sheet',
+    entitlementId: '',
+    entitlementEndAt: radarV2RowValueByAliases_(memberRow, memberMap, ['membership_expires_at', '資格到期時間']) || '',
+    usageLifetime: quotaMode === 'lifetime' ? used : 0,
+    usageMonthly: quotaMode === 'monthly' ? used : 0,
+    used: used,
+    limit: limit,
+    scrapeLimit: limit,
+    remaining: remaining,
+    keywordWatchLimit: keywordLimit,
+    keywordLimit: keywordLimit,
+    accountWatchLimit: accountWatchLimit,
+    analysisEnabled: analysisBasic || analysisAdvanced,
+    analysisBasicEnabled: analysisBasic,
+    analysisAdvancedEnabled: analysisAdvanced,
+    keywordWatchEnabled: keywordScout,
+    accountWatchEnabled: accountWatch,
+    calculatedAt: radarV2Now_()
+  };
+}
+
+function radarV2GetOperatorUsageFallback_(db, memberId, email, quotaMode) {
+  const sheet = db.getSheetByName('USAGE_EVENTS');
+  if (!sheet) return 0;
+
+  const values = sheet.getDataRange().getValues();
+  if (values.length < 2) return 0;
+
+  const map = radarV2HeaderMap_(values[0]);
+  const memberCol = radarV2HeaderIndexByAliases_(map, ['user_id', '會員編號']);
+  const emailCol = radarV2HeaderIndexByAliases_(map, ['email', '電子郵件']);
+  const periodCol = radarV2HeaderIndexByAliases_(map, ['period', '月份']);
+  const lifetimeCol = radarV2HeaderIndexByAliases_(map, ['lifetime_total', '終身累積', '累積抓取量']);
+  const monthlyCol = radarV2HeaderIndexByAliases_(map, ['period_total', '本期累積', '每月抓取量']);
+
+  const normalizedMemberId = String(memberId || '').trim().toLowerCase();
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  const currentPeriod = Utilities.formatDate(new Date(), RADAR_TZ, 'yyyy-MM');
+
+  let total = 0;
+  values.slice(1).forEach(row => {
+    const rowMember = memberCol >= 0 ? String(row[memberCol] || '').trim().toLowerCase() : '';
+    const rowEmail = emailCol >= 0 ? String(row[emailCol] || '').trim().toLowerCase() : '';
+    if (rowMember !== normalizedMemberId && rowEmail !== normalizedEmail) return;
+
+    if (quotaMode === 'monthly') {
+      const period = periodCol >= 0 ? String(row[periodCol] || '').trim() : '';
+      if (period !== currentPeriod) return;
+      if (monthlyCol >= 0) total = Math.max(total, radarV2Number_(row[monthlyCol], 0));
+    } else if (lifetimeCol >= 0) {
+      total = Math.max(total, radarV2Number_(row[lifetimeCol], 0));
+    }
+  });
+
+  return total;
+}
+
+function radarV2HeaderIndexByAliases_(map, aliases) {
+  for (let i = 0; i < aliases.length; i++) {
+    const key = aliases[i];
+    if (map[key] !== undefined) return map[key];
+  }
+  return -1;
+}
+
+function radarV2RowValueByAliases_(row, map, aliases) {
+  const index = radarV2HeaderIndexByAliases_(map, aliases);
+  return index >= 0 ? row[index] : '';
+}
+
+function radarV2Number_(value, fallback) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : Number(fallback || 0);
+}
+
+function radarV2OptionalPositiveNumber_(value) {
+  if (value === '' || value === null || value === undefined) return null;
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function radarV2OptionalNonNegativeNumber_(value) {
+  if (value === '' || value === null || value === undefined) return null;
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? n : null;
 }
 
 function radarV2GrantVipByEmail(email, reason, operator) {
