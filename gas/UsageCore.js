@@ -43,20 +43,67 @@ function normalizePlan_(row) {
     lifetime_limit: Math.max(0, Number(value.lifetime_limit) || 0),
     monthly_limit: Math.max(0, Number(value.monthly_limit) || 0),
     max_per_batch: Math.max(1, Number(value.max_per_batch) || TR_APP.maxBatchSize),
+    keyword_limit: Math.max(0, Number(value.keyword_limit) || 0),
     active
   };
 }
 
-function quotaSnapshot_(plan, lifetimeUsed, periodUsed) {
+function applyMemberQuotaOverrides_(plan, member) {
   const normalized = normalizePlan_(plan);
+  const value = member && typeof member === "object" ? member : {};
+
+  const adjustment = Number(value.usage_adjustment);
+  const rawScrapeOverride = value.scrape_limit_override;
+  const scrapeOverrideNumber = Number(rawScrapeOverride);
+  const hasScrapeOverride =
+    rawScrapeOverride !== "" &&
+    rawScrapeOverride !== null &&
+    rawScrapeOverride !== undefined &&
+    Number.isFinite(scrapeOverrideNumber) &&
+    scrapeOverrideNumber > 0;
+
+  const rawKeywordOverride = value.keyword_limit_override;
+  const keywordOverrideNumber = Number(rawKeywordOverride);
+  const hasKeywordOverride =
+    rawKeywordOverride !== "" &&
+    rawKeywordOverride !== null &&
+    rawKeywordOverride !== undefined &&
+    Number.isFinite(keywordOverrideNumber) &&
+    keywordOverrideNumber >= 0;
+
+  return {
+    ...normalized,
+    usage_adjustment: Number.isFinite(adjustment) ? adjustment : 0,
+    scrape_limit_override: hasScrapeOverride ? scrapeOverrideNumber : null,
+    keyword_limit_override: hasKeywordOverride ? keywordOverrideNumber : null
+  };
+}
+
+function quotaSnapshot_(plan, lifetimeUsed, periodUsed) {
+  const normalized = plan && typeof plan === "object" && Object.prototype.hasOwnProperty.call(plan, "usage_adjustment")
+    ? plan
+    : normalizePlan_(plan);
+
   const lifetime = Math.max(0, Number(lifetimeUsed) || 0);
   const period = Math.max(0, Number(periodUsed) || 0);
-  const limit = normalized.quota_mode === "monthly" ? normalized.monthly_limit : normalized.lifetime_limit;
-  const used = normalized.quota_mode === "monthly" ? period : lifetime;
+  const baseLimit = normalized.quota_mode === "monthly"
+    ? normalized.monthly_limit
+    : normalized.lifetime_limit;
+
+  const limit = Number.isFinite(Number(normalized.scrape_limit_override)) && Number(normalized.scrape_limit_override) > 0
+    ? Number(normalized.scrape_limit_override)
+    : baseLimit;
+
+  const rawUsed = normalized.quota_mode === "monthly" ? period : lifetime;
+  const adjustment = Number(normalized.usage_adjustment);
+  const used = Math.max(0, rawUsed + (Number.isFinite(adjustment) ? adjustment : 0));
+
   return {
     mode: normalized.quota_mode,
     limit,
     used,
+    raw_used: rawUsed,
+    usage_adjustment: Number.isFinite(adjustment) ? adjustment : 0,
     remaining: limit > 0 ? Math.max(0, limit - used) : Number.MAX_SAFE_INTEGER,
     lifetime_used: lifetime,
     period_used: period
