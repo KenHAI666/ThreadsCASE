@@ -1,0 +1,132 @@
+name: Sync GAS to Apps Script
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "gas/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: threads-radar-gas-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: clasp push
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate GAS source
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check gas/Code.js
+          node --check gas/RadarBackendV2.js
+          jq empty gas/appsscript.json
+
+      - name: Validate required secrets
+        shell: bash
+        env:
+          GAS_SCRIPT_ID: ${{ secrets.GAS_SCRIPT_ID }}
+          CLASP_AUTH_JSON: ${{ secrets.CLASP_AUTH_JSON }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GAS_SCRIPT_ID}" ]; then
+            echo "::error::Missing repository secret GAS_SCRIPT_ID"
+            exit 1
+          fi
+          if [ -z "${CLASP_AUTH_JSON}" ]; then
+            echo "::error::Missing repository secret CLASP_AUTH_JSON"
+            exit 1
+          fi
+
+      - name: Configure clasp authentication
+        shell: bash
+        env:
+          CLASP_AUTH_JSON: ${{ secrets.CLASP_AUTH_JSON }}
+        run: |
+          set -euo pipefail
+          printf '%s' "${CLASP_AUTH_JSON}" > "${HOME}/.clasprc.json"
+          chmod 600 "${HOME}/.clasprc.json"
+
+      - name: Create local clasp project binding
+        shell: bash
+        env:
+          GAS_SCRIPT_ID: ${{ secrets.GAS_SCRIPT_ID }}
+        run: |
+          set -euo pipefail
+          jq -n --arg scriptId "${GAS_SCRIPT_ID}"             '{scriptId: $scriptId, rootDir: "gas"}' > .clasp.json
+
+      - name: Verify authorized clasp account
+        run: npx clasp show-authorized-user --json
+
+      - name: Protect remote-only Apps Script files
+        shell: bash
+        env:
+          GAS_SCRIPT_ID: ${{ secrets.GAS_SCRIPT_ID }}
+        run: |
+          set -euo pipefail
+
+          CLASP_BIN="${GITHUB_WORKSPACE}/node_modules/.bin/clasp"
+          REMOTE_DIR="${RUNNER_TEMP}/gas-remote"
+          mkdir -p "${REMOTE_DIR}"
+
+          (
+            cd "${REMOTE_DIR}"
+            "${CLASP_BIN}" clone-script "${GAS_SCRIPT_ID}" --rootDir .
+          )
+
+          find gas -type f \
+            \( -name '*.js' -o -name '*.gs' -o -name '*.html' -o -name 'appsscript.json' \) \
+            -printf '%P\n' \
+            | sed -E 's/\.gs$/.js/' \
+            | sort -u > "${RUNNER_TEMP}/local-files.txt"
+
+          find "${REMOTE_DIR}" -type f \
+            \( -name '*.js' -o -name '*.gs' -o -name '*.html' -o -name 'appsscript.json' \) \
+            -printf '%P\n' \
+            | sed -E 's/\.gs$/.js/' \
+            | sort -u > "${RUNNER_TEMP}/remote-files.txt"
+
+          echo "Local GAS files:"
+          cat "${RUNNER_TEMP}/local-files.txt"
+          echo
+          echo "Remote Apps Script files:"
+          cat "${RUNNER_TEMP}/remote-files.txt"
+
+          REMOTE_ONLY="$(comm -13 "${RUNNER_TEMP}/local-files.txt" "${RUNNER_TEMP}/remote-files.txt" || true)"
+          if [ -n "${REMOTE_ONLY}" ]; then
+            echo "::error::Remote Apps Script contains files that are not tracked in gas/. clasp push would delete them."
+            echo "${REMOTE_ONLY}"
+            echo "Pull/copy these files into gas/ before enabling automatic sync."
+            exit 1
+          fi
+
+      - name: Show files to push
+        run: npx clasp show-file-status
+
+      - name: Push GitHub GAS source to Apps Script
+        run: npx clasp push --force
+
+      - name: Sync complete
+        run: |
+          echo "GitHub gas/** has been synced to Apps Script."
+          echo "This workflow does NOT create/redeploy the production Web App deployment."
