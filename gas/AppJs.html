@@ -1,0 +1,360 @@
+<script>
+(() => {
+  "use strict";
+  const boot = window.THREADS_RADAR_BOOTSTRAP;
+  const $ = id => document.getElementById(id);
+  const titles = { overview:"總覽", library:"文案庫", analysis:"我的分析", "cat-card":"貓咪小卡", logs:"執行紀錄", settings:"設定與匯出" };
+  let page = new URLSearchParams(location.search).get("page") || "overview";
+  let snapshot = null;
+  let usageState = null;
+  let frontendAnalysis = null;
+  let catResult = null;
+  let selectedKeys = new Set();
+  let activeExtensionId = null;
+
+  function element(tag, text, attrs = {}) {
+    const node = document.createElement(tag);
+    if (text !== undefined && text !== null) node.textContent = text;
+    Object.entries(attrs).forEach(([key, value]) => {
+      if (key === "className") node.className = value;
+      else if (key.startsWith("on")) node.addEventListener(key.slice(2).toLowerCase(), value);
+      else node.setAttribute(key, value);
+    });
+    return node;
+  }
+
+  async function bridge(type, payload = {}) {
+    if (!globalThis.chrome || !chrome.runtime || !chrome.runtime.sendMessage) throw new Error("找不到脆文雷達擴充功能");
+    const candidates = [...new Set([activeExtensionId, ...(Array.isArray(boot.extensionIds) ? boot.extensionIds : [])].filter(Boolean))];
+    for (const extensionId of candidates) {
+      try {
+        const data = await new Promise((resolve, reject) => {
+          chrome.runtime.sendMessage(extensionId, { type, ...payload }, response => {
+            const error = chrome.runtime.lastError;
+            if (error || !response) return reject(new Error("無法連接脆文雷達擴充功能"));
+            if (!response.ok) return reject(new Error(response.error || "擴充功能操作失敗"));
+            resolve(response.data);
+          });
+        });
+        activeExtensionId = extensionId;
+        return data;
+      } catch (_error) {}
+    }
+    throw new Error("無法連接脆文雷達擴充功能");
+  }
+
+  function server(functionName, input) {
+    return new Promise((resolve, reject) => {
+      google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[functionName](input);
+    });
+  }
+
+  function showError(message) { $("error").textContent = String(message || "操作失敗"); $("error").hidden = false; }
+  function clearError() { $("error").hidden = true; }
+  function showStatus(message) { $("sync-status").textContent = message; $("sync-status").hidden = false; }
+  function hideStatus() { $("sync-status").hidden = true; }
+  function fmt(value) { return value ? new Date(value).toLocaleString("zh-TW") : "—"; }
+  function isOwnPost(post) { const scope=String(post && post.content_scope || ""); return scope === "my_account" || scope === "own" || (!scope && ["profile","my_account"].includes(String(post && post.source_type || ""))); }
+  function localPosts() { return Array.isArray(snapshot && snapshot.posts) ? snapshot.posts.filter(isOwnPost) : []; }
+  function sessionToken() { return snapshot && snapshot.auth && (snapshot.auth.session_token || snapshot.auth.sessionToken) || ""; }
+  function metric(post) { return `讚 ${post.likes ?? "—"}　留言 ${post.replies ?? "—"}　轉發 ${post.reposts ?? "—"}　總互動 ${post.total_engagement ?? "—"}`; }
+  function engagement(post) { return Number(post.total_engagement) || (Number(post.likes) || 0) + (Number(post.replies) || 0) + (Number(post.reposts) || 0); }
+  function number(value, digits=0) { return Number(value || 0).toLocaleString("zh-TW", { maximumFractionDigits:digits }); }
+  function multiplier(value) { return `${Number(value || 0).toFixed(2)}x`; }
+  function postLength(post) { return Array.from(String(post.text || "").trim()).length; }
+  function postDate(post) { const raw=post.published_at || post.posted_at || post.scraped_at; const date=raw ? new Date(raw) : null; return date && Number.isFinite(date.getTime()) ? date : null; }
+  function hasAdvancedAnalysis() { return ["vip","pro"].includes(String(snapshot && snapshot.auth && snapshot.auth.plan || "").toLowerCase()); }
+  function analysisStateKey() { return `threads-radar-adventure:${String(snapshot && snapshot.auth && snapshot.auth.email || "local").toLowerCase()}`; }
+  function prepareFrontendAnalysis() {
+    frontendAnalysis = ThreadsRadarClient.buildAnalysis(localPosts());
+    let previous={};
+    try { previous=JSON.parse(localStorage.getItem(analysisStateKey()) || "{}"); } catch (_error) {}
+    catResult = ThreadsRadarClient.analyzeCatPosts(frontendAnalysis.posts, {
+      username:frontendAnalysis.posts.find(post => post.username)?.username || "",
+      collectedPostCount:frontendAnalysis.sampleCount,
+      adventure:previous,
+      cardTier:ThreadsRadarClient.cardTierForPlan(snapshot && snapshot.auth && snapshot.auth.plan)
+    });
+    try { localStorage.setItem(analysisStateKey(), JSON.stringify(catResult.adventure)); } catch (_error) {}
+  }
+  function postKeySource(post) {
+    if (post.post_id) return `post:${String(post.post_id).trim()}`;
+    if (post.post_url) return `url:${String(post.post_url).split("?")[0].replace(/\/$/, "").toLowerCase()}`;
+    return `uid:${String(post.uid || "").trim()}`;
+  }
+  async function sha256(value) {
+    const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(value)));
+    return `sha256:${Array.from(new Uint8Array(bytes)).map(byte => byte.toString(16).padStart(2, "0")).join("")}`;
+  }
+
+  function stat(label, value) {
+    const box = element("article", null, { className:"stat" });
+    box.append(element("span", label), element("strong", value));
+    return box;
+  }
+
+  function postCard(post, selectable = false) {
+    const card = element("article", null, { className:"post" });
+    if (selectable) {
+      const label = element("label", null, { className:"post-select" });
+      const checkbox = element("input", null, { type:"checkbox" });
+      const key = String(post.uid || post.post_id || post.post_url || "");
+      checkbox.checked = selectedKeys.has(key);
+      checkbox.addEventListener("change", () => checkbox.checked ? selectedKeys.add(key) : selectedKeys.delete(key));
+      label.append(checkbox, document.createTextNode("選取這篇"));
+      card.append(label);
+    }
+    const head = element("div", null, { className:"post-title" });
+    head.append(element("span", `@${post.username || "未知"} · 文案庫`), element("span", post.published_date || String(post.posted_at || "").slice(0, 10) || "日期未知", { className:"muted" }));
+    card.append(head, element("div", post.text || "（無文字）", { className:"post-text" }), element("div", metric(post), { className:"metrics" }));
+    if (post.post_url) {
+      const actions = element("div", null, { className:"actions" });
+      actions.append(element("a", "開啟原文 ↗", { className:"button", href:post.post_url, target:"_blank", rel:"noopener" }));
+      card.append(actions);
+    }
+    return card;
+  }
+
+  function renderOverview() {
+    const root = document.createDocumentFragment();
+    const posts = localPosts();
+    const usage = usageState && usageState.usage;
+    const adventure = catResult && catResult.adventure || { jobStage:"villager", collectedPostCount:posts.length, currentJob:"villager" };
+    const job = ThreadsRadarClient.JOBS[adventure.currentJob] || ThreadsRadarClient.JOBS.villager;
+    const stage = { villager:"村民", first:"一轉", second:"二轉" }[adventure.jobStage] || "村民";
+    const cards = element("section", null, { className:"cards" });
+    cards.append(
+      stat("本機已保存", String(posts.length)),
+      stat("累積已用額度", usage && usage.limit ? `${usage.used}／${usage.limit}` : "待後台確認"),
+      stat("冒險者", `${stage} · ${adventure.collectedPostCount} 篇`),
+      stat("貓咪小卡職業", job.label)
+    );
+    root.append(cards);
+    const recent = element("section", null, { className:"panel" });
+    const history = Array.isArray(snapshot && snapshot.history) ? snapshot.history : [];
+    const last = history[0];
+    recent.append(element("h2", "最近一次抓取"), element("p", last ? fmt(last.created_at) : "尚未抓取", { className:"muted" }));
+    if (last) recent.append(element("p", `本次掃描 ${last.fetched ?? last.requested ?? 0}｜新增保存 ${last.inserted ?? last.saved ?? 0}｜重複略過 ${last.duplicates ?? 0}`));
+    root.append(recent);
+    const top = element("section", null, { className:"panel" });
+    top.append(element("h2", "近期高互動文案"));
+    const rows = [...posts].sort((a,b) => engagement(b) - engagement(a)).slice(0,5);
+    if (!rows.length) top.append(element("p", "抓取自己的 Threads 文案後，這裡會顯示本機分析。", { className:"empty" }));
+    rows.forEach(post => top.append(postCard(post)));
+    root.append(top);
+    return root;
+  }
+
+  function renderLibrary() {
+    const root = element("section", null, { className:"panel" });
+    const filters = element("div", null, { className:"filters" });
+    const query = element("input", null, { placeholder:"搜尋自己的文章" });
+    const users = element("select");
+    users.append(new Option("全部帳號", ""));
+    [...new Set(localPosts().map(post => post.username).filter(Boolean))].sort().forEach(name => users.append(new Option(`@${name}`, name)));
+    const list = element("div");
+    const draw = () => {
+      const search = query.value.trim().toLowerCase();
+      const username = users.value;
+      const rows = localPosts().filter(post => (!search || `${post.username || ""} ${post.text || ""}`.toLowerCase().includes(search)) && (!username || post.username === username));
+      list.replaceChildren();
+      if (!rows.length) list.append(element("p", "沒有符合條件的本機文案。", { className:"empty" }));
+      rows.forEach(post => list.append(postCard(post, true)));
+    };
+    query.addEventListener("input", draw);
+    users.addEventListener("change", draw);
+    filters.append(query, users);
+    root.append(element("h2", `文案庫（${localPosts().length} 篇）`), element("p", "完整內容只從目前 Chrome 讀取，不會傳送到 GAS。", { className:"muted" }), filters, list);
+    draw();
+    return root;
+  }
+
+  function renderLockedFeature(title) {
+    const panel=element("section",null,{className:"panel locked-feature"});
+    panel.append(element("span","VIP／PRO 解鎖",{className:"tag"}),element("h2",title),element("p","升級後可查看完整分析；資料仍只在這台 Chrome 計算。",{className:"muted"}));
+    return panel;
+  }
+
+  function renderQuota() {
+    const panel=element("section",null,{className:"panel analysis-quota"}),usage=usageState&&usageState.usage,used=Number(usage&&usage.used)||0,limit=Number(usage&&usage.limit)||0,remaining=usage&&usage.remaining;
+    panel.append(element("h2","用量確認"));
+    const summary=element("div",null,{className:"quota-summary"});
+    summary.append(element("strong",limit?`${used}／${limit}`:"—"),element("span",remaining==null?"後台尚未回傳額度":"剩餘 "+remaining+" 篇"));panel.append(summary);
+    const track=element("div",null,{className:"quota-track"}),fill=element("span",null,{className:"quota-fill"});fill.style.width=`${limit?Math.min(100,used/limit*100):0}%`;track.append(fill);panel.append(track,element("p","只計算 GAS 已確認的唯一文章 Hash；完整文案不會送到後台。",{className:"muted"}));return panel;
+  }
+
+  function renderAdventurerInfo(rows,baseline) {
+    const panel=element("section",null,{className:"npc-panel"}),job=ThreadsRadarClient.JOBS[catResult.profession.key]||ThreadsRadarClient.JOBS.villager,high=baseline>0?rows.filter(post=>engagement(post)>=baseline*1.5).length:0,stage={villager:"村民",first:"一轉",second:"二轉"}[catResult.adventure.jobStage]||"村民";
+    panel.append(element("span","NPC 情報站",{className:"tag"}),element("h2","冒險者情報"),element("p","「喔，你回來啦。讓我看看最近的戰績……」",{className:"npc-quote"}));
+    const grid=element("div",null,{className:"npc-grid"});
+    [["職業特性",`${stage} · ${job.label}｜${job.intro}`],["目前戰績",high?`有 ${high} 篇文案明顯高於平常表現。`:"目前還沒有明顯高於平常的文案，再累積一些資料。"],["強勢節奏",hasAdvancedAnalysis()?"下方會整理星期、時段與文章長度的相對表現。":"星期、時段與 TOP／LOW 分析為 VIP／PRO 專屬。"]].forEach(([title,text],index)=>{const card=element("article",null,{className:index===2&&!hasAdvancedAnalysis()?"npc-card is-locked":"npc-card"});card.append(element("h3",title),element("p",text));grid.append(card)});
+    panel.append(grid,element("p",high?`下一步：回頭看這 ${high} 篇高表現文章，找出重複出現的主題、開頭與寫法。`:"下一步：再累積一些文案，讓情報站有更多線索。",{className:"npc-next"}));return panel;
+  }
+
+  function renderTrend(rows,baseline) {
+    const panel=element("article",null,{className:"panel"});panel.append(element("h2","表現趨勢"),element("p","依發文時間排列最近 12 篇；1.0x 代表自己的互動中位數。",{className:"muted"}));
+    const list=element("div",null,{className:"trend-list"}),sorted=[...rows].sort((a,b)=>(postDate(a)?.getTime()||0)-(postDate(b)?.getTime()||0)).slice(-12),max=Math.max(...sorted.map(post=>baseline?engagement(post)/baseline:0),1);
+    sorted.forEach(post=>{const relative=baseline?engagement(post)/baseline:0,row=element("div",null,{className:"trend-row"}),track=element("span",null,{className:"bar-track"}),fill=element("span",null,{className:"bar-fill"});fill.style.width=`${Math.min(100,relative/max*100)}%`;track.append(fill);row.append(element("span",postDate(post)?.toLocaleDateString("zh-TW",{month:"numeric",day:"numeric"})||"未知"),track,element("strong",multiplier(relative)));list.append(row)});panel.append(list);return panel;
+  }
+
+  function renderInteraction(rows) {
+    const panel=element("article",null,{className:"panel"}),totals={likes:0,replies:0,reposts:0,quotes:0};rows.forEach(post=>Object.keys(totals).forEach(key=>totals[key]+=Number(post[key])||0));const all=Object.values(totals).reduce((sum,value)=>sum+value,0),stack=element("div",null,{className:"composition-stack"}),legend=element("div",null,{className:"composition-legend"}),meta={likes:["按讚","#0a6ee8"],replies:["留言","#49a078"],reposts:["轉發","#d89a22"],quotes:["引用","#7c5ce7"]};
+    panel.append(element("h2","互動組成"),element("p","看讀者主要用哪一種方式回應你的內容。",{className:"muted"}));Object.entries(totals).forEach(([key,value])=>{const [label,color]=meta[key],segment=element("span",null,{className:"composition-segment"});segment.style.cssText=`width:${all?value/all*100:0}%;background:${color}`;stack.append(segment);const item=element("div");item.append(element("span",label),element("strong",number(value)));legend.append(item)});panel.append(stack,legend);return panel;
+  }
+
+  function renderLength(rows,baseline) {
+    const panel=element("article",null,{className:"panel"}),groups=[["短文 0–49",0,49],["中短 50–99",50,99],["中長 100–199",100,199],["長文 200+",200,Infinity]],list=element("div",null,{className:"bar-list"});panel.append(element("h2","文章長度 × 表現"),element("p","比較不同字數區間相對於平常表現。",{className:"muted"}));groups.forEach(([label,min,max])=>{const sample=rows.filter(post=>postLength(post)>=min&&postLength(post)<=max),average=sample.length?sample.reduce((sum,post)=>sum+engagement(post),0)/sample.length:0,relative=baseline?average/baseline:0,row=element("div",null,{className:"bar-row"}),track=element("span",null,{className:"bar-track"}),fill=element("span",null,{className:"bar-fill"});fill.style.width=`${Math.min(100,relative/2*100)}%`;track.append(fill);row.append(element("span",label),track,element("strong",sample.length?multiplier(relative):"—"));list.append(row)});panel.append(list);return panel;
+  }
+
+  function renderSummary(rows,baseline) { const panel=element("article",null,{className:"panel"}),averageLength=rows.length?Math.round(rows.reduce((sum,post)=>sum+postLength(post),0)/rows.length):0,above=rows.filter(post=>engagement(post)>=baseline).length;panel.append(element("h2","簡單結論"),element("p",`你的貼文平均約 ${number(averageLength)} 字；平常一篇大約有 ${number(baseline,1)} 次互動。`,{className:"muted"}),element("p",`共有 ${number(above)} 篇達到或超過平常表現。`,{className:"muted"}));return panel; }
+
+  function renderHeatmap(rows,baseline) {
+    const panel=element("section",null,{className:"panel"}),table=element("table",null,{className:"heatmap"}),head=element("tr");["星期／時段","00–05","06–11","12–17","18–23"].forEach(label=>head.append(element("th",label)));const thead=element("thead");thead.append(head);table.append(thead);const body=element("tbody"),days=["日","一","二","三","四","五","六"];
+    days.forEach((label,day)=>{const row=element("tr");row.append(element("th",`週${label}`));[[0,5],[6,11],[12,17],[18,23]].forEach(([start,end])=>{const sample=rows.filter(post=>{const date=postDate(post);return date&&date.getDay()===day&&date.getHours()>=start&&date.getHours()<=end}),average=sample.length?sample.reduce((sum,post)=>sum+engagement(post),0)/sample.length:0,relative=baseline?average/baseline:0,cell=element("td",sample.length?`${multiplier(relative)}\n${sample.length} 篇`:"—");cell.style.background=sample.length?`rgba(10,110,232,${Math.min(.58,.08+relative*.2)})`:"";row.append(cell)});body.append(row)});table.append(body);panel.append(element("h2","星期 × 時段熱力圖"),element("p","以文章發佈時間與自身互動中位數比較。",{className:"muted"}),element("div",null,{className:"table-wrap"}));panel.lastChild.append(table);return panel;
+  }
+
+  function renderTopLow(rows,baseline) {
+    const panel=element("section",null,{className:"panel analysis-top-low"}),tabs=element("div",null,{className:"analysis-tabs"}),top=element("button","TOP 10",{className:"active"}),low=element("button","LOW 10"),list=element("div");panel.append(element("h2","找出好文與待重試的文"),tabs,list);tabs.append(top,low);
+    const draw=mode=>{top.classList.toggle("active",mode==="top");low.classList.toggle("active",mode==="low");const selected=[...rows].sort((a,b)=>mode==="top"?engagement(b)-engagement(a):engagement(a)-engagement(b)).slice(0,10);list.replaceChildren(...selected.map(post=>{const card=postCard(post);card.append(element("span",`平常的 ${multiplier(baseline?engagement(post)/baseline:0)} · ${postLength(post)} 字`,{className:"relative-badge"}));return card}))};top.onclick=()=>draw("top");low.onclick=()=>draw("low");draw("top");return panel;
+  }
+
+  function renderAnalysis() {
+    const root=document.createDocumentFragment(),rows=frontendAnalysis?frontendAnalysis.posts:[],baseline=frontendAnalysis?frontendAnalysis.medianInteractions:0,cards=element("section",null,{className:"cards"});cards.append(stat("分析樣本",`${rows.length} 篇`),stat("互動中位數",number(baseline,1)),stat("平均總互動",number(frontendAnalysis&&frontendAnalysis.averageInteractions,1)),stat("最高相對表現",multiplier(frontendAnalysis&&frontendAnalysis.highestRelative)));root.append(cards);
+    if(!rows.length){root.append(element("p","先完成自己的文案抓取，這裡會顯示完整本機分析。",{className:"notice"}),renderQuota());return root}
+    root.append(renderAdventurerInfo(rows,baseline),renderQuota());const first=element("section",null,{className:"grid"}),second=element("section",null,{className:"grid"});first.append(hasAdvancedAnalysis()?renderTrend(rows,baseline):renderLockedFeature("表現趨勢"),renderInteraction(rows));second.append(hasAdvancedAnalysis()?renderLength(rows,baseline):renderLockedFeature("文章長度 × 表現"),renderSummary(rows,baseline));root.append(first,second,hasAdvancedAnalysis()?renderHeatmap(rows,baseline):renderLockedFeature("星期 × 時段熱力圖"),hasAdvancedAnalysis()?renderTopLow(rows,baseline):renderLockedFeature("TOP／LOW 選文"));return root;
+  }
+
+  function renderCatCard() {
+    const root=document.createDocumentFragment(),panel=element("section",null,{className:"panel cat-card-panel"});panel.append(element("span","THREADS RADAR · CAT CARD",{className:"tag"}),element("h2","把你的脆文雷達，變成一張貓咪小卡。"),element("p","五維能力、戰鬥力與職業只用目前 Chrome 的文案計算。",{className:"muted"}));
+    if(!catResult||!localPosts().length){panel.append(element("p","先抓取自己的 Threads 文案後再產生小卡。",{className:"notice"}));return panel}
+    const status=element("div","正在產生貓咪小卡…",{className:"notice"}),summary=element("div",null,{className:"cat-card-summary"}),tier={normal:"R",silver:"SR",gold:"SSR"}[catResult.adventure.cardTier]||"R";[["已蒐集",`${number(catResult.adventure.collectedPostCount)} 篇`],["分析樣本",`${number(catResult.source.sampleCount)} 篇`],["戰鬥力",number(catResult.battlePower,2)],["活躍天數",`${number(catResult.sample.activeDays)} 天`],["總互動",number(catResult.sample.totalInteractions)],["卡面",tier]].forEach(([label,value])=>{const item=element("div",null,{className:"cat-card-stat"});item.append(element("span",label),element("strong",value));summary.append(item)});
+    const result=element("div",null,{className:"cat-card-result"}),wrap=element("div",null,{className:"cat-card-wrap"}),canvas=element("canvas",null,{width:"1080",height:"1350"}),side=element("aside",null,{className:"cat-card-side"}),job=ThreadsRadarClient.JOBS[catResult.profession.key]||ThreadsRadarClient.JOBS.villager,stage={villager:"村民",first:"一轉",second:"二轉"}[catResult.adventure.jobStage]||"村民",adventure=element("div",null,{className:"notice"}),dimensions=element("div",null,{className:"cat-card-dimensions"});wrap.append(canvas);adventure.append(element("strong",`${stage} · ${job.label}`),element("p",catResult.adventure.jobStage==="villager"?`再蒐集 ${Math.max(0,100-catResult.adventure.collectedPostCount)} 篇即可第一次轉職。`:catResult.adventure.jobStage==="first"?`再蒐集 ${Math.max(0,500-catResult.adventure.collectedPostCount)} 篇即可二轉。`:"二轉完成。"));catResult.dimensions.forEach(row=>{const item=element("div",null,{className:"cat-card-dimension"}),track=element("span",null,{className:"cat-card-bar"}),fill=element("span");fill.style.width=`${Math.max(0,Math.min(100,row.score))}%`;track.append(fill);item.append(element("span",row.label),track,element("strong",number(row.score)));dimensions.append(item)});
+    const actions=element("div",null,{className:"actions"}),download=element("button","下載小卡 PNG",{className:"primary"}),share=element("button","分享結果");download.onclick=()=>canvas.toBlob(blob=>{if(!blob)return;const link=document.createElement("a");link.href=URL.createObjectURL(blob);link.download=`threads-radar-cat-card-${catResult.username||"account"}.png`;link.click();setTimeout(()=>URL.revokeObjectURL(link.href),1000)},"image/png");share.onclick=async()=>{const text=`我在脆文雷達測出：${job.label}｜戰鬥力 ${number(catResult.battlePower,2)}。`;try{if(navigator.share)await navigator.share({title:"脆文雷達貓咪小卡",text,url:location.href});else{await navigator.clipboard.writeText(`${text}\n${location.href}`);status.textContent="結果已複製。"}}catch(error){if(error.name!=="AbortError")status.textContent="分享未完成，仍可下載 PNG。"}};actions.append(download,share);side.append(element("h2",`${job.label} · ${job.subtitle}`),element("p",job.intro),adventure,element("h3","五維能力"),dimensions,actions);result.append(wrap,side);panel.append(status,summary,result);root.append(panel);
+    const codex=element("section",null,{className:"panel"}),list=element("div");codex.append(element("h2","冒險者圖鑑"),element("p","持續蒐集自己的 Threads 文案，逐步解鎖轉職。",{className:"muted"}));Object.entries(ThreadsRadarClient.JOBS).forEach(([key,value])=>{const unlocked=key==="villager"||key===catResult.adventure.baseJob||key===catResult.adventure.currentJob,row=element("span",`${unlocked?"✓":"🔒"} ${value.label}`,{className:unlocked?"codex-item unlocked":"codex-item"});list.append(row)});codex.append(list);root.append(codex);
+    ThreadsRadarClient.drawCard(canvas,catResult).then(()=>{status.textContent=catResult.adventure.jobStage==="villager"?`已蒐集 ${catResult.adventure.collectedPostCount} 篇；再蒐集 ${Math.max(0,100-catResult.adventure.collectedPostCount)} 篇即可第一次轉職。`:catResult.adventure.jobStage==="first"?`一轉完成：${job.label}。再蒐集 ${Math.max(0,500-catResult.adventure.collectedPostCount)} 篇即可二轉。`:`二轉完成：${job.label}。`}).catch(error=>{status.textContent=error.message||"小卡圖片載入失敗。"});return root;
+  }
+
+  function renderLogs() {
+    const panel = element("section", null, { className:"panel" });
+    panel.append(element("h2", "抓取執行紀錄"));
+    const wrap = element("div", null, { className:"table-wrap" });
+    const table = element("table");
+    const head = element("tr");
+    ["時間","狀態","抓取篇數","新增保存","重複剔除","方案上限略過"].forEach(label => head.append(element("th", label)));
+    const thead = element("thead"); thead.append(head); table.append(thead);
+    const body = element("tbody");
+    const rows = Array.isArray(snapshot && snapshot.history) ? snapshot.history : [];
+    rows.forEach(item => {
+      const row = element("tr");
+      [fmt(item.created_at), item.status || "—", item.fetched ?? item.requested ?? 0, item.inserted ?? item.saved ?? 0, item.duplicates ?? 0, item.skipped_limit ?? 0].forEach(value => row.append(element("td", String(value))));
+      body.append(row);
+    });
+    if (!rows.length) { const row = element("tr"); const cell = element("td", "目前沒有執行紀錄", { colspan:"6", className:"empty" }); row.append(cell); body.append(row); }
+    table.append(body); wrap.append(table); panel.append(wrap);
+    return panel;
+  }
+
+  function renderSettings() {
+    const panel = element("section", null, { className:"panel" });
+    panel.append(element("h2", "設定與匯出"), element("p", "CSV／JSON 由擴充功能直接在目前 Chrome 產生，資料不會經過 GAS。", { className:"muted" }));
+    const actions = element("div", null, { className:"actions" });
+    const selectedPosts = () => localPosts().filter(post => selectedKeys.has(String(post.uid || post.post_id || post.post_url || "")));
+    const exportRows = async format => {
+      const rows = selectedPosts();
+      if (!rows.length) throw new Error("請先在文案庫選擇文章");
+      await bridge("BRIDGE_EXPORT_SELECTED", { uids:rows.map(post => post.uid), format });
+    };
+    actions.append(
+      element("button", "匯出已選 CSV", { onClick:() => exportRows("csv").catch(showError) }),
+      element("button", "匯出已選 JSON", { onClick:() => exportRows("json").catch(showError) })
+    );
+    panel.append(actions);
+    return panel;
+  }
+
+  function render() {
+    clearError();
+    $("title").textContent = titles[page] || titles.overview;
+    document.querySelectorAll("#nav button").forEach(button => button.classList.toggle("active", button.dataset.page === page));
+    const auth = snapshot && snapshot.auth || {};
+    $("user-label").textContent = auth.signed_in ? `${auth.email || "已登入"}｜${auth.label || auth.plan || "Free"}` : "尚未登入";
+    $("login").textContent = auth.signed_in ? "Google 登出" : "Google 登入";
+    $("sync-usage").disabled = !auth.signed_in || !sessionToken();
+    const renderers = { overview:renderOverview, library:renderLibrary, analysis:renderAnalysis, "cat-card":renderCatCard, logs:renderLogs, settings:renderSettings };
+    $("content").replaceChildren((renderers[page] || renderOverview)());
+  }
+
+  async function buildUsageItems(posts) {
+    const values = [];
+    const seen = new Set();
+    for (const post of posts) {
+      const source = postKeySource(post);
+      if (!source || source.endsWith(":")) continue;
+      const postKey = await sha256(source);
+      if (seen.has(postKey)) continue;
+      seen.add(postKey);
+      values.push({ post_key:postKey, key_version:"sha256-post-v1" });
+    }
+    return values.sort((left, right) => left.post_key.localeCompare(right.post_key));
+  }
+
+  async function syncUsage() {
+    const token = sessionToken();
+    if (!token) throw new Error("新版登入憑證尚未建立，需更新擴充功能後才能同步額度");
+    const items = await buildUsageItems(localPosts());
+    if (!items.length) { usageState = await server("getUsageState", { sessionToken:token }); render(); return; }
+    let last = null;
+    for (let index = 0; index < items.length; index += 100) {
+      const chunk = items.slice(index, index + 100);
+      const digest = await sha256(`${snapshot.auth.email || "member"}\n${chunk.map(item => item.post_key).join("\n")}`);
+      const batchId = `portal:${digest.slice(7, 39)}:${String(index / 100).padStart(3, "0")}`;
+      last = await server("submitUsageBatch", {
+        sessionToken:token,
+        batchId,
+        items:chunk,
+        extensionVersion:snapshot.extension_version || ""
+      });
+      if (!last || !last.ok) throw new Error(last && last.error || "後台沒有確認這次同步");
+    }
+    usageState = last;
+    const batch = last.batch;
+    showStatus(last.idempotent
+      ? `後台已確認：此批次已同步｜累積 ${last.usage.used}／${last.usage.limit}`
+      : `後台已確認：本次新增 ${batch.new_count}｜重複 ${batch.duplicate_count}｜累積 ${last.usage.used}／${last.usage.limit}`);
+    render();
+  }
+
+  async function load() {
+    clearError(); hideStatus();
+    try {
+      snapshot = await bridge("BRIDGE_SNAPSHOT");
+      prepareFrontendAnalysis();
+      $("subtitle").textContent = `資料只從目前 Chrome 讀取｜最近更新 ${new Date().toLocaleString("zh-TW")}`;
+      if (sessionToken()) await syncUsage();
+      render();
+    } catch (error) {
+      snapshot = snapshot || { auth:{ signed_in:false }, posts:[], history:[] };
+      prepareFrontendAnalysis();
+      render();
+      showError(error.message || "主控台載入失敗");
+    }
+  }
+
+  document.querySelectorAll("#nav button").forEach(button => button.addEventListener("click", () => {
+    page = button.dataset.page;
+    history.replaceState(null, "", `?page=${page}`);
+    render();
+  }));
+  $("refresh").addEventListener("click", load);
+  $("sync-usage").addEventListener("click", () => syncUsage().catch(showError));
+  $("login").addEventListener("click", async () => {
+    try {
+      const signedIn = snapshot && snapshot.auth && snapshot.auth.signed_in;
+      await bridge(signedIn ? "BRIDGE_LOGOUT" : "BRIDGE_LOGIN");
+      await load();
+    } catch (error) { showError(error.message); }
+  });
+  if (!titles[page]) page = "overview";
+  load();
+})();
+</script>

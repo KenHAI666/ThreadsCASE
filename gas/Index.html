@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <?!= include_('Styles'); ?>
+</head>
+<body>
+  <div class="shell">
+    <aside class="side">
+      <h1 class="brand">脆文雷達</h1>
+      <p class="version">客戶主控台 · <?= appVersion ?></p>
+      <p class="user" id="user-label">正在連接擴充功能…</p>
+      <nav class="nav" id="nav">
+        <button class="active" data-page="overview">總覽</button>
+        <button data-page="library">文案庫</button>
+        <button data-page="analysis">我的分析</button>
+        <button data-page="cat-card">貓咪小卡</button>
+        <button data-page="logs">執行紀錄</button>
+        <button data-page="settings">設定與匯出</button>
+      </nav>
+      <div class="local">完整文案只保存在目前 Chrome。GAS 僅接收文章 hash 與批次數量，用來確認額度。</div>
+    </aside>
+    <main>
+      <header class="head">
+        <div>
+          <h1 id="title">總覽</h1>
+          <p class="muted" id="subtitle">正在讀取 Chrome 本機資料…</p>
+        </div>
+        <div class="head-actions">
+          <button id="sync-usage">同步額度</button>
+          <button id="refresh">重新整理</button>
+          <button id="login" class="primary">Google 登入</button>
+        </div>
+      </header>
+      <p class="notice" id="sync-status" hidden></p>
+      <p class="error" id="error" hidden></p>
+      <div id="content"></div>
+    </main>
+  </div>
+  <script>
+    window.THREADS_RADAR_BOOTSTRAP = Object.freeze({
+      appVersion: <?!= JSON.stringify(appVersion) ?>,
+      extensionIds: <?!= JSON.stringify(extensionIds) ?>
+    });
+  </script>
+  <?!= include_('ClientLogic'); ?>
+  <?!= include_('AppJs'); ?>
+</body>
+</html>
