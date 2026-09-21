@@ -30,6 +30,21 @@ Apps Script 專案原始碼
 4. 如果線上有 GitHub 沒有的檔案，直接失敗。
 5. 只有確認不會誤刪遠端檔案才執行 `clasp push --force`。
 
+## 0. 先開啟 Google Apps Script API
+
+clasp 使用 Apps Script API 同步專案。請用管理這個 GAS 專案的 Google 帳號開啟：
+
+https://script.google.com/home/usersettings
+
+確認：
+
+```text
+Google Apps Script API
+→ ON
+```
+
+官方 clasp 安裝說明也要求先開啟 Apps Script API。
+
 ## 需要設定的 GitHub Secrets
 
 到：
