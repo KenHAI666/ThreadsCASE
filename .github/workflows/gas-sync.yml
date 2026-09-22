@@ -11,7 +11,7 @@ on:
         options:
           - sync
           - bootstrap
-          - operator-deploy
+          - member-deploy
   push:
     branches:
       - main
@@ -51,27 +51,34 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          node --check gas/Code.js
-          node --check gas/RadarBackendV2.js
+          for file in gas/*.js; do
+            node --check "$file"
+          done
           jq empty gas/appsscript.json
 
-      - name: Guard operator GAS boundary
+      - name: Guard member API deployment boundary
         shell: bash
         run: |
           set -euo pipefail
           ACCESS="$(jq -r '.webapp.access // ""' gas/appsscript.json)"
-          if [ "${ACCESS}" != "MYSELF" ]; then
-            echo "::warning::This repository GAS is expected to be the operator backend. Current webapp.access=${ACCESS}"
-          fi
-          if ! grep -q 'Threads Radar Spreadsheet Operator' gas/Code.js; then
-            echo "::error::gas/Code.js no longer identifies itself as the operator backend."
+          EXECUTE_AS="$(jq -r '.webapp.executeAs // ""' gas/appsscript.json)"
+          test "${ACCESS}" = "ANYONE_ANONYMOUS" || {
+            echo "::error::Member API web app must be ANYONE_ANONYMOUS; current=${ACCESS}"
             exit 1
-          fi
-          if ! grep -q 'PUBLIC_POST_DISABLED' gas/Code.js; then
-            echo "::error::Operator GAS public POST guard is missing."
+          }
+          test "${EXECUTE_AS}" = "USER_DEPLOYING" || {
+            echo "::error::Member API web app must execute as USER_DEPLOYING; current=${EXECUTE_AS}"
             exit 1
-          fi
-          echo "Confirmed: this workflow manages the operator/admin GAS only, not the Chrome Extension Member API."
+          }
+          grep -q 'Threads Radar Member API' gas/Code.js || {
+            echo "::error::Member API health identity is missing from gas/Code.js"
+            exit 1
+          }
+          grep -q 'submitUsageBatch' gas/Code.js || {
+            echo "::error::Member API submitUsageBatch route is missing"
+            exit 1
+          }
+          echo "Confirmed: this Apps Script deployment is the Chrome Extension Member API. Admin functions remain script-only."
 
       - name: Validate required secrets
         shell: bash
@@ -221,8 +228,8 @@ jobs:
       - name: Push GitHub GAS source to Apps Script
         run: npx clasp push --force
 
-      - name: Validate operator deployment ID
-        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'operator-deploy'
+      - name: Validate member API deployment ID
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'member-deploy'
         shell: bash
         env:
           GAS_DEPLOYMENT_ID: ${{ secrets.GAS_DEPLOYMENT_ID }}
@@ -233,12 +240,12 @@ jobs:
             exit 1
           }
 
-      - name: List operator Apps Script deployments
-        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'operator-deploy'
+      - name: List member API Apps Script deployments
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'member-deploy'
         run: npx clasp list-deployments
 
-      - name: Redeploy operator Apps Script deployment
-        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'operator-deploy'
+      - name: Redeploy member API Apps Script deployment
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'member-deploy'
         shell: bash
         env:
           GAS_DEPLOYMENT_ID: ${{ secrets.GAS_DEPLOYMENT_ID }}
@@ -249,8 +256,8 @@ jobs:
       - name: Sync complete
         run: |
           echo "GitHub gas/** has been synced to Apps Script."
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.mode }}" = "operator-deploy" ]; then
-            echo "Operator Apps Script deployment has also been updated."
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.mode }}" = "member-deploy" ]; then
+            echo "Member API Apps Script deployment has also been updated."
           else
-            echo "Operator deployment was not changed."
+            echo "Member API deployment was not changed."
           fi
