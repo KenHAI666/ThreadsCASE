@@ -1,5 +1,5 @@
 const ADMIN_EMAIL = "luciferhai666@gmail.com";
-const OPERATOR_SPREADSHEET_ID = "1PMgVFKAtqempy2CZpMW5KEDP9n2kClARdZEzmLJUhw4";
+const OPERATOR_SPREADSHEET_ID = "11WOJPBBByb-HgtW9-7Naphe3y3X_XkC45yWRJ8sxBo4";
 const RELEASE_VERSION = "1.1.0";
 const BACKEND_VERSION = "2.0.0";
 const MEMBER_STATUS_OPTIONS = ["啟用", "停用", "active", "terminated"];
