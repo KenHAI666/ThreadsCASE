@@ -7,6 +7,7 @@ const TR_APP = Object.freeze({
   maxBatchSize: 100,
   sessionSeconds: 3600,
   spreadsheetProperty: "THREADS_RADAR_V2_SPREADSHEET_ID",
+  operatorSpreadsheetId: "11WOJPBBByb-HgtW9-7Naphe3y3X_XkC45yWRJ8sxBo4",
   sessionSecretProperty: "THREADS_RADAR_V2_SESSION_SECRET",
   extensionIdProperty: "THREADS_RADAR_EXTENSION_ID",
   adminEmailsProperty: "THREADS_RADAR_ADMIN_EMAILS",
