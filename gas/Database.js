@@ -1,14 +1,12 @@
 function setupThreadsRadarV2() {
   const properties = PropertiesService.getScriptProperties();
-  let spreadsheetId = properties.getProperty(TR_APP.spreadsheetProperty);
-  let spreadsheet;
-  if (spreadsheetId) {
-    spreadsheet = SpreadsheetApp.openById(spreadsheetId);
-  } else {
-    spreadsheet = SpreadsheetApp.create("脆文雷達 V2｜營運資料庫");
-    spreadsheetId = spreadsheet.getId();
-    properties.setProperty(TR_APP.spreadsheetProperty, spreadsheetId);
-  }
+  const spreadsheetId = String(TR_APP.operatorSpreadsheetId || "").trim();
+  if (!spreadsheetId) throw new Error("缺少正式營運資料庫 ID");
+
+  // 11WO... 是唯一正式營運資料庫。舊的 Script Property 只保留相容用途，
+  // 每次 setup 都強制校正，避免再次指回舊的 1PM... 資料庫。
+  properties.setProperty(TR_APP.spreadsheetProperty, spreadsheetId);
+  const spreadsheet = SpreadsheetApp.openById(spreadsheetId);
 
   Object.keys(TR_SHEETS).forEach(name => ensureSheet_(spreadsheet, name, TR_SHEETS[name]));
   seedPlanLimits_(spreadsheet.getSheetByName("PLAN_LIMITS"));
@@ -30,9 +28,16 @@ function setupThreadsRadarV2() {
 }
 
 function getDatabase_() {
-  const id = PropertiesService.getScriptProperties().getProperty(TR_APP.spreadsheetProperty);
-  if (!id) throw new Error("請先執行 setupThreadsRadarV2() 建立營運資料庫");
-  return SpreadsheetApp.openById(id);
+  const authoritativeId = String(TR_APP.operatorSpreadsheetId || "").trim();
+  if (!authoritativeId) throw new Error("缺少正式營運資料庫 ID");
+
+  const properties = PropertiesService.getScriptProperties();
+  const current = String(properties.getProperty(TR_APP.spreadsheetProperty) || "").trim();
+  if (current !== authoritativeId) {
+    properties.setProperty(TR_APP.spreadsheetProperty, authoritativeId);
+  }
+
+  return SpreadsheetApp.openById(authoritativeId);
 }
 
 function sheet_(name) {
