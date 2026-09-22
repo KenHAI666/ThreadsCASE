@@ -1,3 +1,39 @@
+function compatibilityQuotaFields_(state) {
+  const license = state && state.license || {};
+  const usage = state && state.usage || {};
+  return {
+    plan: license.plan || "free",
+    label: license.label || license.plan || "Free",
+    status: license.status || "active",
+    quota_mode: license.quota_mode || "lifetime",
+
+    max_per_batch: Number(license.max_per_batch || license.max_scrape || 0),
+    max_scrape: Number(license.max_scrape || license.max_per_batch || 0),
+    max_posts: Number(license.max_posts || license.library_limit || usage.limit || 0),
+    library_limit: Number(license.library_limit || license.max_posts || usage.limit || 0),
+
+    max_scrapes_lifetime: Number(license.max_scrapes_lifetime || 0),
+    max_scrapes_per_month: Number(license.max_scrapes_per_month || 0),
+
+    used: Number(usage.used || 0),
+    limit: Number(usage.limit || 0),
+    remaining: usage.remaining == null ? null : Number(usage.remaining),
+
+    usage_effective: Number(usage.used || 0),
+    effective_scrape_limit: Number(usage.limit || 0),
+    remaining_scrape: usage.remaining == null ? null : Number(usage.remaining),
+
+    scrape_limit: Number(usage.limit || 0),
+    scrape_used: Number(usage.used || 0),
+    scrape_remaining: usage.remaining == null ? null : Number(usage.remaining),
+
+    lifetime_new_scraped_posts: Number(usage.lifetime_new_scraped_posts || 0),
+    new_scraped_posts: Number(usage.new_scraped_posts || 0),
+
+    keyword_limit: Number(license.keyword_limit || 0)
+  };
+}
+
 function memberLogin_(input) {
   const user = verifyGoogleAccessToken_(input && (input.googleAccessToken || input.google_access_token));
   const lock = LockService.getScriptLock();
@@ -5,6 +41,7 @@ function memberLogin_(input) {
   try {
     const member = upsertMember_(user, input && (input.extensionVersion || input.extension_version));
     const usage = usageStateForUser_(user, member);
+    const compat = compatibilityQuotaFields_(usage);
     return {
       ok: true,
       api_version: TR_APP.apiVersion,
@@ -12,8 +49,21 @@ function memberLogin_(input) {
       user: { email: user.email, name: user.name },
       session_token: createSessionToken_(user),
       session_expires_in: TR_APP.sessionSeconds,
+
+      // Canonical V2 response.
       license: usage.license,
-      usage: usage.usage
+      usage: usage.usage,
+
+      // Compatibility aliases for existing extension builds.
+      ...compat,
+      membership: {
+        plan: compat.plan,
+        label: compat.label,
+        status: compat.status,
+        license: usage.license,
+        usage: usage.usage,
+        ...compat
+      }
     };
   } finally {
     lock.releaseLock();
@@ -25,7 +75,21 @@ function getUsageState(input) {
     const user = authenticateRequest_(input);
     const member = findMember_(user);
     if (!member) throw new Error("找不到會員資料，請重新登入");
-    return { ok: true, ...usageStateForUser_(user, member) };
+    const state = usageStateForUser_(user, member);
+    const compat = compatibilityQuotaFields_(state);
+    return {
+      ok: true,
+      ...state,
+      ...compat,
+      membership: {
+        plan: compat.plan,
+        label: compat.label,
+        status: compat.status,
+        license: state.license,
+        usage: state.usage,
+        ...compat
+      }
+    };
   } catch (error) {
     return failure_(error);
   }
@@ -230,8 +294,10 @@ function batchDigest_(userId, batch) {
 }
 
 function batchResponse_(batch, state, idempotent) {
+  const compat = compatibilityQuotaFields_(state);
   return {
     ok: true,
+    ...compat,
     api_version: TR_APP.apiVersion,
     usage_contract: TR_APP.usageContract,
     idempotent: Boolean(idempotent),
@@ -245,7 +311,15 @@ function batchResponse_(batch, state, idempotent) {
       confirmed_at: batch.confirmed_at instanceof Date ? batch.confirmed_at.toISOString() : String(batch.confirmed_at || "")
     },
     license: state.license,
-    usage: state.usage
+    usage: state.usage,
+    membership: {
+      plan: compat.plan,
+      label: compat.label,
+      status: compat.status,
+      license: state.license,
+      usage: state.usage,
+      ...compat
+    }
   };
 }
 
