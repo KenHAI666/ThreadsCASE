@@ -11,7 +11,7 @@ on:
         options:
           - sync
           - bootstrap
-          - deploy
+          - operator-deploy
   push:
     branches:
       - main
@@ -54,6 +54,24 @@ jobs:
           node --check gas/Code.js
           node --check gas/RadarBackendV2.js
           jq empty gas/appsscript.json
+
+      - name: Guard operator GAS boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          ACCESS="$(jq -r '.webapp.access // ""' gas/appsscript.json)"
+          if [ "${ACCESS}" != "MYSELF" ]; then
+            echo "::warning::This repository GAS is expected to be the operator backend. Current webapp.access=${ACCESS}"
+          fi
+          if ! grep -q 'Threads Radar Spreadsheet Operator' gas/Code.js; then
+            echo "::error::gas/Code.js no longer identifies itself as the operator backend."
+            exit 1
+          fi
+          if ! grep -q 'PUBLIC_POST_DISABLED' gas/Code.js; then
+            echo "::error::Operator GAS public POST guard is missing."
+            exit 1
+          fi
+          echo "Confirmed: this workflow manages the operator/admin GAS only, not the Chrome Extension Member API."
 
       - name: Validate required secrets
         shell: bash
@@ -203,8 +221,8 @@ jobs:
       - name: Push GitHub GAS source to Apps Script
         run: npx clasp push --force
 
-      - name: Validate production deployment ID
-        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'deploy'
+      - name: Validate operator deployment ID
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'operator-deploy'
         shell: bash
         env:
           GAS_DEPLOYMENT_ID: ${{ secrets.GAS_DEPLOYMENT_ID }}
@@ -215,12 +233,12 @@ jobs:
             exit 1
           }
 
-      - name: List Apps Script deployments
-        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'deploy'
+      - name: List operator Apps Script deployments
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'operator-deploy'
         run: npx clasp list-deployments
 
-      - name: Redeploy existing production deployment
-        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'deploy'
+      - name: Redeploy operator Apps Script deployment
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'operator-deploy'
         shell: bash
         env:
           GAS_DEPLOYMENT_ID: ${{ secrets.GAS_DEPLOYMENT_ID }}
@@ -231,8 +249,8 @@ jobs:
       - name: Sync complete
         run: |
           echo "GitHub gas/** has been synced to Apps Script."
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.mode }}" = "deploy" ]; then
-            echo "Existing Apps Script production deployment has also been updated."
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.mode }}" = "operator-deploy" ]; then
+            echo "Operator Apps Script deployment has also been updated."
           else
-            echo "Production deployment was not changed."
+            echo "Operator deployment was not changed."
           fi
