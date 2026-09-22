@@ -20,23 +20,17 @@ const MEMBER_STATUS_OPTIONS = ["啟用", "停用", "active", "terminated"];
  * appsscript.json 現在 access=MYSELF，因此只有部署者可開啟。
  */
 function doGet() {
-  const admin = requireSoleAdmin_();
-  const database = SpreadsheetApp.openById(OPERATOR_SPREADSHEET_ID);
-  const config = radarV2GetConfig();
   return json_({
     ok: true,
-    service: "Threads Radar Spreadsheet Operator",
-    version: RELEASE_VERSION,
-    backend_version: BACKEND_VERSION,
-    backend: "entitlement-v2",
-    admin: admin,
-    spreadsheet_url: database.getUrl(),
-    portaly: {
-      enabled: Boolean(config.portaly_enabled),
-      mode: String(config.portaly_mode || "test"),
-      pro_price_twd: Number(config.portaly_pro_price_twd || 199)
-    },
-    message: "V2 已啟用：VIP 由 ENTITLEMENTS 人工授權；PRO 預留 Portaly。"
+    service: "Threads Radar Member API",
+    version: TR_APP.apiVersion,
+    app_version: TR_APP.version,
+    usage_contract: TR_APP.usageContract,
+    supported_actions: [
+      "memberLogin",
+      "getUsageState",
+      "submitUsageBatch"
+    ]
   });
 }
 
@@ -44,13 +38,106 @@ function doGet() {
  * 暫時拒絕公開 POST。
  * Portaly Callback 不應直接打到 GAS；之後由可讀 HTTP headers 的 gateway 驗證後再呼叫 V2 處理邏輯。
  */
-function doPost() {
-  requireSoleAdmin_();
-  return json_({
-    ok: false,
-    error: "PUBLIC_POST_DISABLED",
-    message: "目前 GAS 不接受公開 API 或未驗證 Portaly callback。"
-  });
+function doPost(e) {
+  try {
+    const request = parseMemberApiRequest_(e);
+    const action = String(
+      request.action ||
+      request.op ||
+      request.operation ||
+      ""
+    ).trim();
+
+    const nested = request.payload && typeof request.payload === "object"
+      ? request.payload
+      : request.input && typeof request.input === "object"
+        ? request.input
+        : {};
+
+    const input = Object.assign({}, request, nested);
+    delete input.action;
+    delete input.op;
+    delete input.operation;
+    delete input.payload;
+    delete input.input;
+
+    let result;
+    switch (action) {
+      case "memberLogin":
+      case "login":
+      case "membershipLogin":
+        result = memberLogin_(input);
+        break;
+
+      case "getUsageState":
+      case "getMembership":
+      case "refreshMembership":
+        result = getUsageState(input);
+        break;
+
+      case "submitUsageBatch":
+      case "syncUsage":
+        result = submitUsageBatch(input);
+        break;
+
+      case "health":
+        result = {
+          ok: true,
+          service: "Threads Radar Member API",
+          version: TR_APP.apiVersion,
+          usage_contract: TR_APP.usageContract
+        };
+        break;
+
+      default:
+        result = {
+          ok: false,
+          api_version: TR_APP.apiVersion,
+          error: "UNKNOWN_ACTION",
+          message: "不支援的會員 API 操作"
+        };
+    }
+
+    return json_(result);
+  } catch (error) {
+    return json_(typeof failure_ === "function"
+      ? failure_(error)
+      : {
+          ok: false,
+          error: "MEMBER_API_ERROR",
+          message: String(error && error.message || error || "伺服器錯誤")
+        });
+  }
+}
+
+function parseMemberApiRequest_(e) {
+  const raw = e && e.postData && e.postData.contents
+    ? String(e.postData.contents)
+    : "";
+
+  if (raw) {
+    try {
+      const value = JSON.parse(raw);
+      if (value && typeof value === "object") return value;
+    } catch (_error) {
+      // Fall through to form/query parameters for compatibility.
+    }
+  }
+
+  const parameters = e && e.parameter && typeof e.parameter === "object"
+    ? e.parameter
+    : {};
+
+  if (parameters.payload) {
+    try {
+      const value = JSON.parse(parameters.payload);
+      if (value && typeof value === "object") {
+        return Object.assign({}, parameters, value);
+      }
+    } catch (_error) {}
+  }
+
+  return Object.assign({}, parameters);
 }
 
 /**
