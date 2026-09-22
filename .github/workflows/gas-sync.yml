@@ -11,6 +11,7 @@ on:
         options:
           - sync
           - bootstrap
+          - deploy
   push:
     branches:
       - main
@@ -202,7 +203,36 @@ jobs:
       - name: Push GitHub GAS source to Apps Script
         run: npx clasp push --force
 
+      - name: Validate production deployment ID
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'deploy'
+        shell: bash
+        env:
+          GAS_DEPLOYMENT_ID: ${{ secrets.GAS_DEPLOYMENT_ID }}
+        run: |
+          set -euo pipefail
+          test -n "${GAS_DEPLOYMENT_ID}" || {
+            echo "::error::Missing repository secret GAS_DEPLOYMENT_ID"
+            exit 1
+          }
+
+      - name: List Apps Script deployments
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'deploy'
+        run: npx clasp list-deployments
+
+      - name: Redeploy existing production deployment
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'deploy'
+        shell: bash
+        env:
+          GAS_DEPLOYMENT_ID: ${{ secrets.GAS_DEPLOYMENT_ID }}
+        run: |
+          set -euo pipefail
+          npx clasp create-deployment             --deploymentId "${GAS_DEPLOYMENT_ID}"             --description "GitHub production deploy ${GITHUB_SHA}"
+
       - name: Sync complete
         run: |
           echo "GitHub gas/** has been synced to Apps Script."
-          echo "This workflow does NOT redeploy the production Web App."
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.mode }}" = "deploy" ]; then
+            echo "Existing Apps Script production deployment has also been updated."
+          else
+            echo "Production deployment was not changed."
+          fi
