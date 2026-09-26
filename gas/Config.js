@@ -16,7 +16,7 @@ const TR_APP = Object.freeze({
   defaultAdminClientId: "",
   adminUiEnabled: false,
   storeExtensionId: "aaaihgbgeagjlblhfmacjokjemeidgnf",
-  localTestExtensionIds: Object.freeze(["alkieogigpplbmifheoldfeejnmpkbmn"])
+  localTestExtensionIds: Object.freeze(["djmanfnolkmkjpilojblkmjjgofdanee"])
 });
 
 const TR_SHEETS = Object.freeze({

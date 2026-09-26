@@ -185,10 +185,21 @@ function submitUsageBatch(input) {
   }
 }
 
+function memberRowsForUser_(user) {
+  const userId = String(user && user.id || "").trim();
+  const email = String(user && user.email || "").trim().toLowerCase();
+  const rows = rowsAsObjects_(sheet_("MEMBERS"));
+  const matches = rows.filter(row =>
+    (userId && String(row.user_id || "").trim() === userId) ||
+    (email && String(row.email || "").trim().toLowerCase() === email)
+  );
+  if (matches.length > 1) throw new Error("會員資料有重複或衝突，已停止寫入");
+  return matches;
+}
+
 function upsertMember_(user, extensionVersion) {
   const sheet = sheet_("MEMBERS");
-  const rows = rowsAsObjects_(sheet);
-  const existing = rows.find(row => String(row.user_id) === user.id || String(row.email).toLowerCase() === user.email);
+  const existing = memberRowsForUser_(user)[0] || null;
   const now = new Date();
   if (!existing) {
     const value = {
@@ -209,6 +220,7 @@ function upsertMember_(user, extensionVersion) {
 
   const columns = headerIndex_(sheet);
   const updates = {
+    user_id: user.id,
     email: user.email,
     name: user.name,
     updated_at: now,
@@ -221,7 +233,7 @@ function upsertMember_(user, extensionVersion) {
 }
 
 function findMember_(user) {
-  return rowsAsObjects_(sheet_("MEMBERS")).find(row => String(row.user_id) === user.id || String(row.email).toLowerCase() === user.email) || null;
+  return memberRowsForUser_(user)[0] || null;
 }
 
 function planForMember_(member) {
