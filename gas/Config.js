@@ -1,6 +1,6 @@
 const TR_APP = Object.freeze({
   name: "脆文雷達",
-  version: "2.0.0-beta.7",
+  version: "2.0.0",
   apiVersion: "v2",
   usageContract: "portal_usage_v1",
   keyVersion: "sha256-post-v1",
